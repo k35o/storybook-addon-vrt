@@ -1,4 +1,4 @@
-# storybook-vitest-vrt
+# storybook-addon-vrt
 
 Self-contained visual regression testing for Storybook stories running on
 [Vitest browser mode](https://vitest.dev/guide/browser/) via
@@ -27,7 +27,7 @@ Self-contained visual regression testing for Storybook stories running on
 ## Setup
 
 ```sh
-npm install --save-dev storybook-vitest-vrt
+npm install --save-dev storybook-addon-vrt
 ```
 
 Add the `vrt()` plugin to the **same Vitest project** as `storybookTest()`:
@@ -36,7 +36,7 @@ Add the `vrt()` plugin to the **same Vitest project** as `storybookTest()`:
 // vitest.config.ts / vite.config.ts
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import { playwright } from '@vitest/browser-playwright';
-import { vrt } from 'storybook-vitest-vrt/vitest-plugin';
+import { vrt } from 'storybook-addon-vrt/vitest-plugin';
 
 export default defineConfig({
   test: {
@@ -163,7 +163,7 @@ the bundled decorator as a version-proof fallback:
 
 ```ts
 // .storybook/preview.ts
-import vrtPreview from 'storybook-vitest-vrt/preview';
+import vrtPreview from 'storybook-addon-vrt/preview';
 
 export default {
   decorators: [...vrtPreview.decorators],

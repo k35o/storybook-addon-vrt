@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
 import react from '@vitejs/plugin-react';
 import { playwright } from '@vitest/browser-playwright';
-import { vrt } from 'storybook-vitest-vrt/vitest-plugin';
+import { vrt } from 'storybook-addon-vrt/vitest-plugin';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

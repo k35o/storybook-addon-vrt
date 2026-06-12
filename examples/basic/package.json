@@ -26,7 +26,7 @@
     "@vitest/browser-playwright": "catalog:",
     "playwright": "catalog:",
     "storybook": "catalog:",
-    "storybook-vitest-vrt": "workspace:*",
+    "storybook-addon-vrt": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",

@@ -1,10 +1,10 @@
 {
-  "name": "storybook-vitest-vrt-workspace",
+  "name": "storybook-addon-vrt-workspace",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter storybook-vitest-vrt build",
-    "test": "pnpm --filter storybook-vitest-vrt test",
+    "build": "pnpm --filter storybook-addon-vrt build",
+    "test": "pnpm --filter storybook-addon-vrt test",
     "e2e": "pnpm build && pnpm --filter example-basic e2e",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm -r check",
@@ -14,7 +14,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "2.31.0",
-    "storybook-vitest-vrt": "workspace:*",
+    "storybook-addon-vrt": "workspace:*",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@11.5.0",

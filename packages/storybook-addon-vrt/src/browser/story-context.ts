@@ -10,7 +10,7 @@ export type VrtGlobalStoryContext = {
 // Duck-typed view of what `@storybook/addon-vitest` puts on the test
 // context (`context.story = composedStory`, `task.meta.storyId = ...`).
 // These are internals, hence the fallback to the global context that our
-// optional `storybook-vitest-vrt/preview` decorator maintains.
+// optional `storybook-addon-vrt/preview` decorator maintains.
 type StoryLike = {
   id?: string;
   parameters?: { vrt?: VrtStoryParameters };

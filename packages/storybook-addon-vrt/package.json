@@ -1,25 +1,26 @@
 {
-  "name": "storybook-vitest-vrt",
+  "name": "storybook-addon-vrt",
   "version": "0.0.0",
   "description": "Self-contained visual regression testing for Storybook stories running on Vitest browser mode",
   "keywords": [
-    "screenshot",
+    "storybook-addon",
     "storybook",
-    "testing",
-    "visual-regression-testing",
     "vitest",
-    "vrt"
+    "visual-regression-testing",
+    "vrt",
+    "screenshot",
+    "test"
   ],
-  "homepage": "https://github.com/k35o/storybook-vitest-vrt#readme",
+  "homepage": "https://github.com/k35o/storybook-addon-vrt#readme",
   "bugs": {
-    "url": "https://github.com/k35o/storybook-vitest-vrt/issues"
+    "url": "https://github.com/k35o/storybook-addon-vrt/issues"
   },
   "license": "MIT",
   "author": "k8o",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/k35o/storybook-vitest-vrt.git",
-    "directory": "packages/storybook-vitest-vrt"
+    "url": "git+https://github.com/k35o/storybook-addon-vrt.git",
+    "directory": "packages/storybook-addon-vrt"
   },
   "bin": {
     "svrt": "./dist/cli.mjs"

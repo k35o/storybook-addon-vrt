@@ -1,14 +1,14 @@
-# storybook-vitest-vrt (workspace)
+# storybook-addon-vrt (workspace)
 
 Self-contained visual regression testing for Storybook stories running on
 Vitest browser mode. See the
-[package README](./packages/storybook-vitest-vrt/README.md) for usage.
+[package README](./packages/storybook-addon-vrt/README.md) for usage.
 
 ## Layout
 
 | Path                            | Description                                  |
 | ------------------------------- | -------------------------------------------- |
-| `packages/storybook-vitest-vrt` | The published library (plugin, runtime, CLI) |
+| `packages/storybook-addon-vrt` | The published library (plugin, runtime, CLI) |
 | `examples/basic`                | React + Storybook playground and E2E harness |
 
 ## Commands

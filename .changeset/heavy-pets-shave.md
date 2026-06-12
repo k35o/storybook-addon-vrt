@@ -1,5 +1,5 @@
 ---
-'storybook-vitest-vrt': minor
+'storybook-addon-vrt': minor
 ---
 
 Initial release: self-contained visual regression testing for Storybook stories running on Vitest browser mode.

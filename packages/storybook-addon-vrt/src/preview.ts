@@ -16,7 +16,7 @@ type StoryContextLike = {
  * changes:
  *
  * ```ts
- * import vrtPreview from 'storybook-vitest-vrt/preview';
+ * import vrtPreview from 'storybook-addon-vrt/preview';
  * export default { decorators: [...vrtPreview.decorators] };
  * ```
  */

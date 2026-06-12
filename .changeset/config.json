@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
   "changelog": [
     "@changesets/changelog-github",
-    { "repo": "k35o/storybook-vitest-vrt" }
+    { "repo": "k35o/storybook-addon-vrt" }
   ],
   "commit": false,
   "fixed": [],

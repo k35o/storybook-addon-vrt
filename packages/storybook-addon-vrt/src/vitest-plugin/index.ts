@@ -50,7 +50,7 @@ type VitestUserConfigLike = UserConfig & {
  */
 export function vrt(options: VrtOptions = {}): Plugin {
   return {
-    name: 'storybook-vitest-vrt',
+    name: 'storybook-addon-vrt',
     config(config) {
       const root = config.root ? path.resolve(config.root) : process.cwd();
       const resolved = resolveVrtConfig({ cwd: root, inline: options });
@@ -78,9 +78,9 @@ export function vrt(options: VrtOptions = {}): Plugin {
       // setup file lands AFTER them (its afterEach then runs first — LIFO).
       return {
         test: {
-          setupFiles: [resolveOwnFile('storybook-vitest-vrt/setup', '../browser/setup.mjs')],
+          setupFiles: [resolveOwnFile('storybook-addon-vrt/setup', '../browser/setup.mjs')],
           globalSetup: [
-            resolveOwnFile('storybook-vitest-vrt/internal/global-setup', './global-setup.mjs'),
+            resolveOwnFile('storybook-addon-vrt/internal/global-setup', './global-setup.mjs'),
           ],
           env: {
             __VRT_OPTIONS__: JSON.stringify(runtime),
