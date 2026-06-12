@@ -1,0 +1,33 @@
+packages:
+  - packages/*
+  - examples/*
+
+catalog:
+  '@storybook/addon-vitest': 10.4.1
+  '@storybook/react-vite': 10.4.1
+  '@types/node': 24.12.4
+  '@types/pngjs': 6.0.5
+  '@types/react': 19.2.15
+  '@types/react-dom': 19.2.3
+  '@vitejs/plugin-react': 6.0.2
+  '@vitest/browser-playwright': 4.1.7
+  cac: 7.0.0
+  pixelmatch: 7.2.0
+  playwright: 1.60.0
+  pngjs: 7.0.0
+  react: 19.2.6
+  react-dom: 19.2.6
+  storybook: 10.4.1
+  typescript: 6.0.3
+  vite: 8.0.14
+  vite-plus: 0.1.23
+  vitest: 4.1.7
+
+blockExoticSubdeps: true
+
+allowBuilds:
+  esbuild: false
+
+minimumReleaseAge: 4320
+
+verifyDepsBeforeRun: install
