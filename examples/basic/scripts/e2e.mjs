@@ -4,6 +4,7 @@
 // is independent of the OS/font rendering it runs on.
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,13 +13,27 @@ const vrtDir = path.join(root, '.vrt');
 const actualDir = path.join(vrtDir, 'actual');
 const expectedDir = path.join(vrtDir, 'expected');
 
-function run(args, env = {}) {
-  const result = spawnSync('pnpm', ['exec', ...args], {
+// Resolve the CLI through the package exports instead of the `svrt` bin:
+// pnpm only links workspace bins whose target exists at install time, and
+// in CI the install happens before the build.
+const require = createRequire(import.meta.url);
+const cliPath = path.join(
+  path.dirname(require.resolve('storybook-addon-vrt/package.json')),
+  'dist',
+  'cli.mjs',
+);
+
+function run(command, args, env = {}) {
+  const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     env: { ...process.env, ...env },
   });
   return result.status ?? 1;
+}
+
+function svrt(...args) {
+  return run('node', [cliPath, ...args]);
 }
 
 function fail(message) {
@@ -43,7 +58,7 @@ const KEYS = {
 // 1. Capture every story.
 rmSync(vrtDir, { recursive: true, force: true });
 assert(
-  run(['vitest', 'run', '--project=storybook'], { VRT: '1' }) === 0,
+  run('pnpm', ['exec', 'vitest', 'run', '--project=storybook'], { VRT: '1' }) === 0,
   'vitest capture run must succeed',
 );
 for (const key of [KEYS.primary, KEYS.clicked, KEYS.cardDefault, KEYS.cardMasked]) {
@@ -56,7 +71,7 @@ assert(
 
 // 2. Promote everything to baseline → compare must pass.
 cpSync(actualDir, expectedDir, { recursive: true });
-assert(run(['svrt', 'compare']) === 0, 'compare against identical baseline must pass');
+assert(svrt('compare') === 0, 'compare against identical baseline must pass');
 
 // 3. Simulate a change, a new story and a removed story.
 copyFileSync(path.join(expectedDir, KEYS.cardDefault), path.join(expectedDir, KEYS.primary)); // baseline now differs from actual → changed
@@ -66,7 +81,7 @@ copyFileSync(
   path.join(expectedDir, 'src/card.stories.tsx/Ghost.png'),
 ); // baseline without actual → deleted
 
-const exitCode = run(['svrt', 'compare']);
+const exitCode = svrt('compare');
 assert(exitCode === 1, `compare with differences must exit 1 (got ${exitCode})`);
 
 const report = JSON.parse(readFileSync(path.join(vrtDir, 'report.json'), 'utf8'));
@@ -83,19 +98,19 @@ assert(
 );
 
 // 4. Approve without --prune keeps the orphaned baseline (safety default).
-assert(run(['svrt', 'approve']) === 0, 'approve must succeed');
+assert(svrt('approve') === 0, 'approve must succeed');
 assert(
   existsSync(path.join(expectedDir, 'src/card.stories.tsx/Ghost.png')),
   'approve without --prune must keep orphaned baselines',
 );
-assert(run(['svrt', 'compare']) === 1, 'compare must still fail while the orphan remains');
+assert(svrt('compare') === 1, 'compare must still fail while the orphan remains');
 
 // 5. Approve with --prune removes it → compare passes again.
-assert(run(['svrt', 'approve', '--prune']) === 0, 'approve --prune must succeed');
+assert(svrt('approve', '--prune') === 0, 'approve --prune must succeed');
 assert(
   !existsSync(path.join(expectedDir, 'src/card.stories.tsx/Ghost.png')),
   'approve --prune must delete orphaned baselines',
 );
-assert(run(['svrt', 'compare']) === 0, 'compare after approve --prune must pass');
+assert(svrt('compare') === 0, 'compare after approve --prune must pass');
 
 console.info('e2e: all assertions passed');
