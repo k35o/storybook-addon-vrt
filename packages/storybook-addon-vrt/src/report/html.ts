@@ -6,6 +6,12 @@ import type { VrtReport } from '../types';
  * Renders a fully self-contained report page. Images are referenced
  * relatively, so the report works as long as it sits inside baseDir —
  * locally or downloaded as a single CI artifact.
+ *
+ * The page is laid out as a review tool, not a document: a sidebar with
+ * the verdict and the story list, and a detail pane for the selected
+ * screenshot. The visual language (palette, radii, shadows, weights) is
+ * ported from the ArteOdyssey design tokens, without taking a runtime
+ * dependency on the design system.
  */
 export function renderReportHtml(report: VrtReport): string {
   // `</script>` inside the JSON payload would terminate the script tag.
@@ -15,273 +21,717 @@ export function renderReportHtml(report: VrtReport): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
 <title>VRT Report</title>
 <style>
   :root {
     color-scheme: light dark;
-    --bg: light-dark(#fafaf9, #1c1917);
-    --fg: light-dark(#1c1917, #fafaf9);
-    --muted: light-dark(#78716c, #a8a29e);
-    --card: light-dark(#ffffff, #292524);
-    --border: light-dark(#e7e5e4, #44403c);
-    --passed: #16a34a;
-    --changed: #dc2626;
-    --added: #0891b2;
-    --deleted: #c026d3;
+    /* ArteOdyssey palette: gray h235 / teal h180 / red h25 / yellow h90 / green h150 */
+    --surface: light-dark(oklch(0.975 0.001 235), oklch(0.25 0.0015 235));
+    --canvas: light-dark(oklch(1 0 0), oklch(0.3 0.002 235));
+    --well: light-dark(oklch(0.975 0.001 235), oklch(0.25 0.0015 235));
+    --fg: light-dark(oklch(0.25 0.0015 235), oklch(0.975 0.001 235));
+    --fg-mute: light-dark(oklch(0.52 0.006 235), oklch(0.75 0.005 235));
+    --fg-subtle: light-dark(oklch(0.66 0.006 235), oklch(0.66 0.006 235));
+    --line: light-dark(oklch(0.9 0.003 235), oklch(0.42 0.003 235));
+    --line-subtle: light-dark(oklch(0.945 0.0015 235), oklch(0.36 0.0025 235));
+    --hover: light-dark(oklch(0.945 0.0015 235), oklch(0.34 0.0025 235));
+    --primary: light-dark(oklch(0.575 0.145 180), oklch(0.84 0.16 180));
+    --selected-bg: light-dark(oklch(0.945 0.058 180), oklch(0.37 0.078 180));
+    --selected-fg: light-dark(oklch(0.41 0.098 180), oklch(0.9 0.11 180));
+    --changed-fg: light-dark(oklch(0.49 0.22 25), oklch(0.84 0.15 25));
+    --changed-bg: light-dark(oklch(0.975 0.016 25), oklch(0.37 0.14 25));
+    --changed-bd: light-dark(oklch(0.9 0.084 25), oklch(0.49 0.22 25));
+    --changed-dot: light-dark(oklch(0.66 0.27 25), oklch(0.75 0.225 25));
+    --added-fg: light-dark(oklch(0.49 0.12 180), oklch(0.84 0.16 180));
+    --added-bg: light-dark(oklch(0.975 0.02 180), oklch(0.37 0.078 180));
+    --added-bd: light-dark(oklch(0.9 0.11 180), oklch(0.49 0.12 180));
+    --added-dot: light-dark(oklch(0.66 0.165 180), oklch(0.75 0.175 180));
+    --deleted-fg: light-dark(oklch(0.49 0.135 90), oklch(0.84 0.2 90));
+    --deleted-bg: light-dark(oklch(0.975 0.03 90), oklch(0.37 0.085 90));
+    --deleted-bd: light-dark(oklch(0.9 0.148 90), oklch(0.49 0.135 90));
+    --deleted-dot: light-dark(oklch(0.66 0.18 90), oklch(0.75 0.2 90));
+    --passed-fg: light-dark(oklch(0.49 0.18 150), oklch(0.84 0.175 150));
+    --passed-bg: light-dark(oklch(0.975 0.02 150), oklch(0.37 0.108 150));
+    --passed-bd: light-dark(oklch(0.9 0.1 150), oklch(0.49 0.18 150));
+    --passed-dot: light-dark(oklch(0.66 0.245 150), oklch(0.75 0.21 150));
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    accent-color: var(--primary);
   }
+  .changed { --c-fg: var(--changed-fg); --c-bg: var(--changed-bg); --c-bd: var(--changed-bd); --c-dot: var(--changed-dot); }
+  .added { --c-fg: var(--added-fg); --c-bg: var(--added-bg); --c-bd: var(--added-bd); --c-dot: var(--added-dot); }
+  .deleted { --c-fg: var(--deleted-fg); --c-bg: var(--deleted-bg); --c-bd: var(--deleted-bd); --c-dot: var(--deleted-dot); }
+  .passed { --c-fg: var(--passed-fg); --c-bg: var(--passed-bg); --c-bd: var(--passed-bd); --c-dot: var(--passed-dot); }
+
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
-    background: var(--bg);
+    background: var(--surface);
     color: var(--fg);
-    font-family: ui-sans-serif, system-ui, sans-serif;
-    line-height: 1.6;
+    font-family: 'Noto Sans JP', ui-sans-serif, system-ui, 'Hiragino Sans', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.625;
   }
-  header {
-    padding: 1.5rem 2rem 1rem;
-    border-bottom: 1px solid var(--border);
-  }
-  h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
-  .meta { color: var(--muted); font-size: 0.8rem; }
-  main { padding: 1rem 2rem 4rem; max-width: 80rem; margin-inline: auto; }
-  .tabs { display: flex; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; }
-  .tab {
-    border: 1px solid var(--border);
-    background: var(--card);
-    color: var(--fg);
-    border-radius: 999px;
-    padding: 0.35rem 1rem;
-    font-size: 0.85rem;
+  a { color: inherit; }
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
     cursor: pointer;
   }
-  .tab[aria-pressed='true'] { border-color: currentColor; }
-  .tab .count { font-weight: 700; }
-  .tab.changed { color: var(--changed); }
-  .tab.added { color: var(--added); }
-  .tab.deleted { color: var(--deleted); }
-  .tab.passed { color: var(--passed); }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 0.75rem;
-    margin-bottom: 1.25rem;
-    overflow: hidden;
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+    border-radius: var(--radius-sm);
   }
-  .card > h2 {
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin: 0;
-    padding: 0.75rem 1rem;
+  .mono { font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 19rem 1fr;
+    height: 100dvh;
+  }
+
+  /* ---- sidebar ---- */
+  .sidebar {
     display: flex;
-    gap: 0.75rem;
-    align-items: baseline;
+    flex-direction: column;
+    border-right: 1px solid var(--line-subtle);
+    min-height: 0;
+  }
+  .side-head { padding: 1.75rem 1.5rem 1.25rem; }
+  .eyebrow {
+    font-size: 0.6875rem;
+    color: var(--fg-subtle);
+    margin: 0 0 0.875rem;
+  }
+  .verdict {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+    margin: 0 0 1rem;
+  }
+  .verdict .num { font-size: 1.75rem; margin-right: 0.25rem; font-variant-numeric: tabular-nums; }
+  .verdict.ok { color: var(--passed-fg); }
+  .ratio {
+    display: flex;
+    gap: 2px;
+    height: 0.375rem;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+  .ratio span { background: var(--c-dot); }
+  .meta {
+    color: var(--fg-subtle);
+    font-size: 0.6875rem;
+    line-height: 1.7;
+  }
+
+  .filters {
+    display: flex;
     flex-wrap: wrap;
-    border-bottom: 1px solid var(--border);
+    gap: 0.375rem;
+    padding: 0 1.5rem 1rem;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.1875rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--fg-subtle);
+    font-size: 0.71875rem;
+    font-weight: 450;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+  }
+  .chip .count { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chip:hover { border-color: var(--c-bd); }
+  .chip[aria-pressed='true'] {
+    background: var(--c-bg);
+    border-color: var(--c-bd);
+    color: var(--c-fg);
+  }
+
+  .list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem 0.875rem 1.25rem;
+    min-height: 0;
+  }
+  .file-label {
+    font-size: 0.6875rem;
+    color: var(--fg-subtle);
+    padding: 1rem 0.625rem 0.25rem;
+    overflow-wrap: anywhere;
+  }
+  .file-label:first-child { padding-top: 0.25rem; }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--radius-md);
+    color: var(--fg-mute);
+    font-size: 0.8125rem;
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .item:hover { background: var(--hover); }
+  .item[aria-current='true'] {
+    background: var(--selected-bg);
+    color: var(--selected-fg);
+    font-weight: 450;
+  }
+  .item .dot {
+    flex: none;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 999px;
+    background: var(--c-dot);
+  }
+  .item .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .side-foot {
+    padding: 0.875rem 1.5rem;
+    border-top: 1px solid var(--line-subtle);
+    color: var(--fg-subtle);
+    font-size: 0.6875rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  kbd {
+    font-family: inherit;
+    font-size: 0.625rem;
+    border: 1px solid var(--line);
+    border-radius: 0.25rem;
+    padding: 0 0.3125rem;
+    color: var(--fg-mute);
+  }
+
+  /* ---- detail ---- */
+  .detail {
+    background: var(--canvas);
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-head {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+  .title-block { min-width: 0; }
+  .title-row { display: flex; align-items: center; gap: 0.625rem; }
+  .detail h2 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+    overflow-wrap: anywhere;
   }
   .badge {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.1rem 0.6rem;
+    flex: none;
+    font-size: 0.6875rem;
+    font-weight: 450;
+    line-height: 1.5;
+    padding: 0.0625rem 0.625rem;
     border-radius: 999px;
-    color: #fff;
+    background: var(--c-bg);
+    border: 1px solid var(--c-bd);
+    color: var(--c-fg);
   }
-  .badge.changed { background: var(--changed); }
-  .badge.added { background: var(--added); }
-  .badge.deleted { background: var(--deleted); }
-  .badge.passed { background: var(--passed); }
-  .metrics { color: var(--muted); font-size: 0.75rem; font-weight: 400; }
-  .modes { display: flex; gap: 0.25rem; padding: 0.5rem 1rem 0; }
-  .modes button {
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    border-radius: 0.4rem;
+  .path {
+    font-size: 0.71875rem;
+    color: var(--fg-subtle);
+    overflow-wrap: anywhere;
+  }
+  .head-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    flex-wrap: wrap;
+  }
+  .metrics {
+    color: var(--fg-mute);
     font-size: 0.75rem;
-    padding: 0.2rem 0.7rem;
-    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
-  .modes button[aria-pressed='true'] { color: var(--fg); border-color: var(--fg); }
-  .viewer { padding: 1rem; }
-  .columns { display: flex; gap: 0.75rem; align-items: flex-start; }
+  .modes {
+    display: inline-flex;
+    gap: 0.125rem;
+    padding: 0.1875rem;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+  .modes button {
+    padding: 0.1875rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 450;
+    color: var(--fg-mute);
+    transition: background-color 150ms ease-out, color 150ms ease-out;
+  }
+  .modes button[aria-pressed='true'] {
+    background: var(--canvas);
+    color: var(--fg);
+    box-shadow: var(--shadow-xs);
+  }
+  .pager { display: inline-flex; gap: 0.25rem; }
+  .pager button {
+    width: 1.75rem;
+    height: 1.75rem;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--fg-mute);
+    transition: background-color 150ms ease-out;
+  }
+  .pager button:hover { background: var(--hover); }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+  .pager button:disabled:hover { background: none; }
+
+  .stage {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+  }
+  .columns { display: flex; gap: 1.25rem; align-items: flex-start; }
   .columns figure { margin: 0; flex: 1; min-width: 0; }
-  .columns figcaption {
-    font-size: 0.7rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
+  figcaption {
+    font-size: 0.6875rem;
+    font-weight: 450;
+    color: var(--fg-subtle);
+    margin-bottom: 0.375rem;
   }
-  .viewer img {
-    max-width: 100%;
-    display: block;
-    border: 1px solid var(--border);
+  .shot {
+    display: flex;
+    justify-content: center;
+    /* The mat keeps screenshot pixels away from the rounded corners so
+       story content at the viewport edges is never clipped. */
+    padding: 0.625rem;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--radius-lg);
     background:
-      repeating-conic-gradient(light-dark(#f5f5f4, #3a3633) 0% 25%, transparent 0% 50%)
-      0 0 / 16px 16px;
+      repeating-conic-gradient(light-dark(oklch(0.945 0.0015 235), oklch(0.34 0.0025 235)) 0% 25%, transparent 0% 50%)
+      0 0 / 14px 14px var(--well);
+    overflow: hidden;
   }
+  .shot img {
+    display: block;
+    max-width: 100%;
+    max-height: min(40rem, calc(100dvh - 17.25rem));
+    object-fit: contain;
+    box-shadow: 0 0 0 1px var(--line-subtle);
+  }
+  a.shot-link { display: block; border-radius: var(--radius-lg); }
+
   .overlay { position: relative; display: inline-block; max-width: 100%; }
-  .overlay img + img { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--clip, 50%)); }
-  .overlay input[type='range'] { width: 100%; display: block; margin-top: 0.5rem; }
-  .empty { color: var(--muted); padding: 2rem 0; text-align: center; }
+  .overlay .shot + .shot {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 0 0 var(--clip, 50%));
+  }
+  .overlay .divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--clip, 50%);
+    width: 2px;
+    background: var(--primary);
+    pointer-events: none;
+  }
+  .overlay .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 999px;
+    background: var(--primary);
+    box-shadow: var(--shadow-sm);
+  }
+  .overlay-wrap input[type='range'] {
+    width: 100%;
+    display: block;
+    margin-top: 0.875rem;
+  }
+
+  .empty {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: var(--fg-subtle);
+  }
+
+  @media (max-width: 56rem) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--line-subtle); }
+    .list { max-height: 18rem; }
+    .detail-head { padding: 1.25rem 1.25rem; }
+    .stage { padding: 1.25rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0s !important; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>VRT Report</h1>
-  <div class="meta" id="meta"></div>
-</header>
-<main>
-  <div class="tabs" id="tabs"></div>
-  <div id="items"></div>
-</main>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-head">
+      <p class="eyebrow mono">storybook-addon-vrt</p>
+      <p class="verdict" id="verdict"></p>
+      <div class="ratio" id="ratio" aria-hidden="true"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filter by status"></div>
+    <nav class="list" id="list" aria-label="Screenshots"></nav>
+    <div class="side-foot">
+      <span><kbd>↑</kbd> <kbd>↓</kbd> navigate · <kbd>1</kbd>–<kbd>3</kbd> mode</span>
+    </div>
+  </aside>
+  <main class="detail" id="detail"></main>
+</div>
 <script type="application/json" id="report-data">${payload}</script>
 <script>
 (() => {
   const report = JSON.parse(document.getElementById('report-data').textContent);
   const STATUSES = ['changed', 'added', 'deleted', 'passed'];
-  const visible = new Set(STATUSES.filter((s) => s !== 'passed'));
+  const MODES = ['side-by-side', 'slider', 'blink'];
+  const ORDER = { changed: 0, added: 1, deleted: 2, passed: 3 };
 
-  document.getElementById('meta').textContent =
-    new Date(report.createdAt).toLocaleString() +
-    ' — threshold ' + report.options.threshold +
-    ', failOn: ' + report.options.failOn.join(', ');
+  const state = {
+    visible: new Set(
+      report.summary.changed + report.summary.added + report.summary.deleted > 0
+        ? STATUSES.filter((s) => s !== 'passed')
+        : STATUSES,
+    ),
+    selected: null,
+    mode: 'side-by-side',
+  };
 
-  const tabs = document.getElementById('tabs');
-  for (const status of STATUSES) {
-    const count = report.summary[status];
-    const button = document.createElement('button');
-    button.className = 'tab ' + status;
-    const countLabel = document.createElement('span');
-    countLabel.className = 'count';
-    countLabel.textContent = String(count);
-    button.append(countLabel, document.createTextNode(' ' + status));
-    button.setAttribute('aria-pressed', String(visible.has(status)));
-    button.addEventListener('click', () => {
-      visible.has(status) ? visible.delete(status) : visible.add(status);
-      button.setAttribute('aria-pressed', String(visible.has(status)));
-      render();
-    });
-    tabs.append(button);
+  const items = report.items.map((item) => {
+    const slash = item.key.lastIndexOf('/');
+    return {
+      ...item,
+      file: slash === -1 ? '(root)' : item.key.slice(0, slash),
+      name: (slash === -1 ? item.key : item.key.slice(slash + 1)).replace(/\\.png$/, ''),
+    };
+  });
+
+  function visibleItems() {
+    const filtered = items.filter((item) => state.visible.has(item.status));
+    const groups = new Map();
+    for (const item of filtered) {
+      if (!groups.has(item.file)) groups.set(item.file, []);
+      groups.get(item.file).push(item);
+    }
+    const flat = [];
+    for (const [, group] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
+      group.sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.name.localeCompare(b.name));
+      flat.push(...group);
+    }
+    return flat;
   }
 
-  const image = (src, caption) => {
-    const figure = document.createElement('figure');
-    if (caption) {
-      const figcaption = document.createElement('figcaption');
-      figcaption.textContent = caption;
-      figure.append(figcaption);
-    }
+  /* ---- sidebar head ---- */
+  const verdict = document.getElementById('verdict');
+  const review = report.summary.changed + report.summary.added + report.summary.deleted;
+  if (review > 0) {
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = String(review);
+    verdict.append(
+      num,
+      document.createTextNode('screenshot' + (review === 1 ? '' : 's') + ' to review'),
+    );
+  } else {
+    verdict.classList.add('ok');
+    verdict.textContent = 'All ' + report.summary.total + ' passed';
+  }
+
+  const ratio = document.getElementById('ratio');
+  for (const status of STATUSES) {
+    const count = report.summary[status];
+    if (count === 0) continue;
+    const segment = document.createElement('span');
+    segment.className = status;
+    segment.style.flexGrow = String(count);
+    ratio.append(segment);
+  }
+
+  const meta = document.getElementById('meta');
+  for (const text of [
+    new Date(report.createdAt).toLocaleString(),
+    'threshold ' + report.options.threshold + ' · fail on ' + report.options.failOn.join(', '),
+  ]) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    meta.append(div);
+  }
+
+  /* ---- filters ---- */
+  const filters = document.getElementById('filters');
+  for (const status of STATUSES) {
+    const button = document.createElement('button');
+    button.className = 'chip ' + status;
+    const count = document.createElement('span');
+    count.className = 'count';
+    count.textContent = String(report.summary[status]);
+    button.append(count, document.createTextNode(status));
+    button.setAttribute('aria-pressed', String(state.visible.has(status)));
+    button.addEventListener('click', () => {
+      state.visible.has(status) ? state.visible.delete(status) : state.visible.add(status);
+      button.setAttribute('aria-pressed', String(state.visible.has(status)));
+      const flat = visibleItems();
+      if (!flat.some((item) => item.key === state.selected)) {
+        state.selected = flat[0]?.key ?? null;
+      }
+      render();
+    });
+    filters.append(button);
+  }
+
+  /* ---- viewers ---- */
+  const shot = (src) => {
+    const frame = document.createElement('span');
+    frame.className = 'shot';
     const img = document.createElement('img');
     img.src = src;
-    img.loading = 'lazy';
-    figure.append(img);
-    return figure;
+    frame.append(img);
+    return frame;
+  };
+
+  const figure = (src, caption) => {
+    const element = document.createElement('figure');
+    const figcaption = document.createElement('figcaption');
+    figcaption.textContent = caption;
+    const link = document.createElement('a');
+    link.className = 'shot-link';
+    link.href = src;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = 'Open full size';
+    link.append(shot(src));
+    element.append(figcaption, link);
+    return element;
   };
 
   const viewers = {
     'side-by-side'(item) {
       const columns = document.createElement('div');
       columns.className = 'columns';
-      if (item.paths.expected) columns.append(image(item.paths.expected, 'expected'));
-      if (item.paths.actual) columns.append(image(item.paths.actual, 'actual'));
-      if (item.paths.diff) columns.append(image(item.paths.diff, 'diff'));
+      if (item.paths.expected) columns.append(figure(item.paths.expected, 'expected'));
+      if (item.paths.actual) columns.append(figure(item.paths.actual, 'actual'));
+      if (item.paths.diff) columns.append(figure(item.paths.diff, 'diff'));
       return columns;
     },
     slider(item) {
       const overlay = document.createElement('div');
       overlay.className = 'overlay';
-      const expected = image(item.paths.expected).querySelector('img');
-      const actual = image(item.paths.actual).querySelector('img');
-      overlay.append(expected, actual);
+      const divider = document.createElement('span');
+      divider.className = 'divider';
+      overlay.append(shot(item.paths.expected), shot(item.paths.actual), divider);
       const range = document.createElement('input');
       range.type = 'range';
       range.min = '0';
       range.max = '100';
       range.value = '50';
+      range.setAttribute('aria-label', 'Reveal actual screenshot');
       range.addEventListener('input', () => {
         overlay.style.setProperty('--clip', range.value + '%');
       });
       const wrap = document.createElement('div');
+      wrap.className = 'overlay-wrap';
       wrap.append(overlay, range);
       return wrap;
     },
     blink(item) {
-      const figure = image(item.paths.expected);
-      const img = figure.querySelector('img');
+      const frame = shot(item.paths.expected);
+      const img = frame.querySelector('img');
       let showActual = false;
       const timer = setInterval(() => {
         if (!img.isConnected) { clearInterval(timer); return; }
         showActual = !showActual;
         img.src = showActual ? item.paths.actual : item.paths.expected;
       }, 700);
-      return figure;
+      const element = document.createElement('figure');
+      element.style.margin = '0';
+      element.append(frame);
+      return element;
     },
   };
 
-  function card(item) {
-    const element = document.createElement('section');
-    element.className = 'card';
-    const heading = document.createElement('h2');
+  /* ---- render ---- */
+  function renderList() {
+    const list = document.getElementById('list');
+    list.replaceChildren();
+    let currentFile = null;
+    for (const item of visibleItems()) {
+      if (item.file !== currentFile) {
+        currentFile = item.file;
+        const label = document.createElement('div');
+        label.className = 'file-label mono';
+        label.textContent = item.file;
+        list.append(label);
+      }
+      const button = document.createElement('button');
+      button.className = 'item ' + item.status;
+      button.setAttribute('aria-current', String(item.key === state.selected));
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = item.name;
+      name.title = item.name;
+      button.append(dot, name);
+      button.addEventListener('click', () => {
+        state.selected = item.key;
+        render();
+      });
+      list.append(button);
+    }
+  }
+
+  function renderDetail() {
+    const detail = document.getElementById('detail');
+    detail.replaceChildren();
+    const flat = visibleItems();
+    const item = flat.find((candidate) => candidate.key === state.selected);
+    if (!item) {
+      const empty = document.createElement('p');
+      empty.className = 'empty';
+      empty.textContent = flat.length === 0
+        ? 'Nothing to show for the selected statuses.'
+        : 'Select a screenshot from the list.';
+      detail.append(empty);
+      return;
+    }
+    const index = flat.indexOf(item);
+
+    const head = document.createElement('header');
+    head.className = 'detail-head';
+
+    const titleBlock = document.createElement('div');
+    titleBlock.className = 'title-block';
+    const titleRow = document.createElement('div');
+    titleRow.className = 'title-row';
+    const title = document.createElement('h2');
+    title.textContent = item.name;
     const badge = document.createElement('span');
     badge.className = 'badge ' + item.status;
     badge.textContent = item.status;
-    heading.append(badge, document.createTextNode(item.key));
+    titleRow.append(title, badge);
+    const filePath = document.createElement('div');
+    filePath.className = 'path mono';
+    filePath.textContent = item.file;
+    titleBlock.append(titleRow, filePath);
+
+    const actions = document.createElement('div');
+    actions.className = 'head-actions';
     if (item.mismatchedPixels !== undefined) {
       const metrics = document.createElement('span');
       metrics.className = 'metrics';
       metrics.textContent =
-        item.mismatchedPixels + 'px (' + (item.mismatchRatio * 100).toFixed(2) + '%)' +
+        item.mismatchedPixels.toLocaleString() + 'px (' + (item.mismatchRatio * 100).toFixed(2) + '%)' +
         (item.dimensions
           ? ' — ' + item.dimensions.expected.join('×') + ' → ' + item.dimensions.actual.join('×')
           : '');
-      heading.append(metrics);
+      actions.append(metrics);
     }
-    element.append(heading);
-
-    const viewer = document.createElement('div');
-    viewer.className = 'viewer';
-    const hasBoth = item.paths.expected && item.paths.actual;
-    if (hasBoth) {
-      const modes = document.createElement('div');
+    const comparable = item.paths.expected && item.paths.actual;
+    if (comparable) {
+      const modes = document.createElement('span');
       modes.className = 'modes';
-      for (const mode of Object.keys(viewers)) {
+      modes.setAttribute('role', 'group');
+      modes.setAttribute('aria-label', 'Comparison mode');
+      for (const mode of MODES) {
         const button = document.createElement('button');
         button.textContent = mode;
-        button.setAttribute('aria-pressed', String(mode === 'side-by-side'));
+        button.setAttribute('aria-pressed', String(mode === state.mode));
         button.addEventListener('click', () => {
-          for (const sibling of modes.children) sibling.setAttribute('aria-pressed', 'false');
-          button.setAttribute('aria-pressed', 'true');
-          viewer.replaceChildren(viewers[mode](item));
+          state.mode = mode;
+          renderDetail();
         });
         modes.append(button);
       }
-      element.append(modes);
-      viewer.append(viewers['side-by-side'](item));
-    } else {
-      viewer.append(viewers['side-by-side'](item));
+      actions.append(modes);
     }
-    element.append(viewer);
-    return element;
+    const pager = document.createElement('span');
+    pager.className = 'pager';
+    for (const [glyph, delta, label] of [['↑', -1, 'Previous'], ['↓', 1, 'Next']]) {
+      const button = document.createElement('button');
+      button.textContent = glyph;
+      button.setAttribute('aria-label', label + ' screenshot');
+      button.disabled = index + delta < 0 || index + delta >= flat.length;
+      button.addEventListener('click', () => move(delta));
+      pager.append(button);
+    }
+    actions.append(pager);
+
+    head.append(titleBlock, actions);
+
+    const stage = document.createElement('div');
+    stage.className = 'stage';
+    const mode = comparable ? state.mode : 'side-by-side';
+    stage.append(viewers[mode](item));
+
+    detail.append(head, stage);
   }
 
   function render() {
-    const container = document.getElementById('items');
-    container.replaceChildren();
-    const items = report.items.filter((item) => visible.has(item.status));
-    if (items.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'empty';
-      empty.textContent = 'Nothing to show for the selected statuses.';
-      container.append(empty);
-      return;
-    }
-    const order = { changed: 0, added: 1, deleted: 2, passed: 3 };
-    for (const item of [...items].sort((a, b) => order[a.status] - order[b.status])) {
-      container.append(card(item));
-    }
+    renderList();
+    renderDetail();
   }
 
+  function move(delta) {
+    const flat = visibleItems();
+    if (flat.length === 0) return;
+    const index = flat.findIndex((item) => item.key === state.selected);
+    const next = index === -1 ? 0 : Math.min(Math.max(index + delta, 0), flat.length - 1);
+    state.selected = flat[next].key;
+    render();
+    document.querySelector('.item[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  window.addEventListener('keydown', (event) => {
+    if (event.target instanceof HTMLInputElement) return;
+    if (event.key === 'ArrowDown') { event.preventDefault(); move(1); }
+    if (event.key === 'ArrowUp') { event.preventDefault(); move(-1); }
+    const modeIndex = ['1', '2', '3'].indexOf(event.key);
+    if (modeIndex !== -1) {
+      state.mode = MODES[modeIndex];
+      renderDetail();
+    }
+  });
+
+  state.selected = visibleItems()[0]?.key ?? null;
   render();
 })();
 </script>
