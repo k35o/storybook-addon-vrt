@@ -39,6 +39,23 @@ function assertType(
       `Invalid value for "${key}" in ${source}: expected ${type}, got ${typeof value}`,
     );
   }
+  if (type === 'number' && value !== undefined && !Number.isFinite(value)) {
+    throw new VrtConfigError(`Invalid value for "${key}" in ${source}: expected a finite number`);
+  }
+}
+
+function assertRange(
+  value: number | undefined,
+  min: number,
+  max: number,
+  key: string,
+  source: string,
+): void {
+  if (value !== undefined && (value < min || value > max)) {
+    throw new VrtConfigError(
+      `Invalid value for "${key}" in ${source}: expected a number between ${min} and ${max}, got ${value}`,
+    );
+  }
 }
 
 function validateOptions(options: VrtOptions, source: string): void {
@@ -54,11 +71,28 @@ function validateOptions(options: VrtOptions, source: string): void {
   assertType(options.diffDir, 'string', 'diffDir', source);
   assertType(options.browserNameSuffix, 'boolean', 'browserNameSuffix', source);
   assertType(options.threshold, 'number', 'threshold', source);
+  assertRange(options.threshold, 0, 1, 'threshold', source);
   assertType(options.allowedMismatchedPixels, 'number', 'allowedMismatchedPixels', source);
+  assertRange(
+    options.allowedMismatchedPixels,
+    0,
+    Number.MAX_SAFE_INTEGER,
+    'allowedMismatchedPixels',
+    source,
+  );
   assertType(options.allowedMismatchedPixelRatio, 'number', 'allowedMismatchedPixelRatio', source);
+  assertRange(options.allowedMismatchedPixelRatio, 0, 1, 'allowedMismatchedPixelRatio', source);
   if (options.stability !== undefined) {
     assertType(options.stability.retries, 'number', 'stability.retries', source);
+    assertRange(options.stability.retries, 1, Number.MAX_SAFE_INTEGER, 'stability.retries', source);
     assertType(options.stability.interval, 'number', 'stability.interval', source);
+    assertRange(
+      options.stability.interval,
+      0,
+      Number.MAX_SAFE_INTEGER,
+      'stability.interval',
+      source,
+    );
     assertType(
       options.stability.disableAnimations,
       'boolean',

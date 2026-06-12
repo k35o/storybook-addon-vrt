@@ -12,7 +12,7 @@ Self-contained visual regression testing for Storybook stories running on
 - 📊 **Reports** — console summary, `report.json`, and a self-contained
   `report.html` with side-by-side / slider / blink viewers.
 - ✅ **Approval flow** — `svrt approve` promotes captured screenshots to
-  baselines and prunes orphans.
+  baselines; orphaned baselines are only removed with an explicit `--prune`.
 - 🪶 **Minimal coupling** — no dependency on Storybook packages and no
   third-party VRT services. The Storybook-facing surface is a duck-typed
   test context plus an optional one-line decorator, so major upgrades of
@@ -113,7 +113,7 @@ export const Flaky: Story = {
 | Parameter | Type                   | Description                                                   |
 | --------- | ---------------------- | ------------------------------------------------------------- |
 | `skip`    | `boolean`              | Skip capturing this story.                                    |
-| `delay`   | `number`               | Extra milliseconds to wait after the stability checks.        |
+| `delay`   | `number`               | Extra milliseconds to wait before the stability checks.       |
 | `mask`    | `string \| string[]`   | CSS selector(s) covered by an opaque overlay.                 |
 | `remove`  | `string \| string[]`   | CSS selector(s) removed from layout (`display: none`).        |
 | `capture` | `'viewport' \| string` | Capture the viewport (default) or the first matching element. |
@@ -147,7 +147,7 @@ the Vitest project root, or as CLI flags. Precedence:
 svrt compare [--threshold <n>] [--allowed-mismatched-pixels <n>]
              [--allowed-mismatched-pixel-ratio <n>] [--fail-on changed,added]
              [--open]
-svrt approve [--filter <glob>] [--dry-run]
+svrt approve [--filter <glob>] [--prune] [--dry-run]
 svrt report
 ```
 
@@ -220,8 +220,9 @@ opens as a working report after download.
 
 - **Partial test runs**: `vitest run --project=storybook some.stories.tsx`
   captures only a subset, so `svrt compare` reports the missing stories as
-  `deleted` and `svrt approve` would delete their baselines. Approve only
-  after full runs, or scope it with `--filter`.
+  `deleted`. `svrt approve` never deletes baselines by default — it keeps
+  orphans and warns about them. Pass `--prune` only after a FULL vitest
+  run (optionally scoped with `--filter`).
 - **Watch mode**: capture is meant for `vitest run`; repeated watch-mode
   reruns thrash the actual directory.
 - **Browser updates**: a new Chromium version can shift rendering by a few

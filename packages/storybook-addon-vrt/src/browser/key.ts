@@ -5,6 +5,9 @@ export function toPosixPath(p: string): string {
   return p.replaceAll('\\', '/');
 }
 
+// Windows refuses these as file name stems, even with an extension.
+const WINDOWS_RESERVED_NAMES = /^(?:con|prn|aux|nul|com\d|lpt\d)$/iu;
+
 /** Makes a story/test name safe to use as a file name on every platform. */
 export function sanitizeStoryName(name: string): string {
   const sanitized = name
@@ -12,7 +15,8 @@ export function sanitizeStoryName(name: string): string {
     .replace(/[\\/:*?"<>|\p{Cc} ]/gu, '-')
     .replace(/-{2,}/gu, '-')
     .replace(/[\s.-]+$/gu, '');
-  return sanitized === '' ? 'story' : sanitized;
+  if (sanitized === '') return 'story';
+  return WINDOWS_RESERVED_NAMES.test(sanitized) ? `${sanitized}-` : sanitized;
 }
 
 export type DeriveKeyInput = {

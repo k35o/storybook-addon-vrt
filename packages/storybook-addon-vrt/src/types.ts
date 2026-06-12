@@ -77,7 +77,7 @@ export type VrtOptions = {
 export type VrtStoryParameters = {
   /** Skip capturing this story (the Vitest test itself still runs). */
   skip?: boolean;
-  /** Extra milliseconds to wait after the stability checks. */
+  /** Extra milliseconds to wait before the stability checks. */
   delay?: number;
   /** CSS selector(s) whose elements are covered by an opaque overlay. */
   mask?: string | string[];

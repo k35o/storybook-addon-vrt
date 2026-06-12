@@ -82,8 +82,20 @@ assert(
   'diff image must be written for the changed item',
 );
 
-// 4. Approve → compare must pass again.
+// 4. Approve without --prune keeps the orphaned baseline (safety default).
 assert(run(['svrt', 'approve']) === 0, 'approve must succeed');
-assert(run(['svrt', 'compare']) === 0, 'compare after approve must pass');
+assert(
+  existsSync(path.join(expectedDir, 'src/card.stories.tsx/Ghost.png')),
+  'approve without --prune must keep orphaned baselines',
+);
+assert(run(['svrt', 'compare']) === 1, 'compare must still fail while the orphan remains');
+
+// 5. Approve with --prune removes it → compare passes again.
+assert(run(['svrt', 'approve', '--prune']) === 0, 'approve --prune must succeed');
+assert(
+  !existsSync(path.join(expectedDir, 'src/card.stories.tsx/Ghost.png')),
+  'approve --prune must delete orphaned baselines',
+);
+assert(run(['svrt', 'compare']) === 0, 'compare after approve --prune must pass');
 
 console.info('e2e: all assertions passed');

@@ -28,6 +28,13 @@ describe('sanitizeStoryName', () => {
     expect(sanitizeStoryName('///')).toBe('story');
     expect(sanitizeStoryName('')).toBe('story');
   });
+
+  it('defuses Windows reserved device names', () => {
+    expect(sanitizeStoryName('CON')).toBe('CON-');
+    expect(sanitizeStoryName('aux')).toBe('aux-');
+    expect(sanitizeStoryName('COM1')).toBe('COM1-');
+    expect(sanitizeStoryName('Console')).toBe('Console');
+  });
 });
 
 describe('deriveKey', () => {

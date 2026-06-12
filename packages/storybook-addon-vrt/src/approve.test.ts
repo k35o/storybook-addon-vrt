@@ -47,7 +47,7 @@ async function makeFixture(files: {
 }
 
 describe('approve', () => {
-  it('copies every actual over expected and deletes orphaned baselines', async () => {
+  it('copies every actual over expected and keeps orphaned baselines by default', async () => {
     const config = await makeFixture({
       expected: { 'a/changed.png': 'old', 'a/gone.png': 'orphan' },
       actual: { 'a/changed.png': 'new', 'b/added.png': 'fresh' },
@@ -57,22 +57,39 @@ describe('approve', () => {
 
     expect(result).toEqual({
       copied: ['a/changed.png', 'b/added.png'],
-      deleted: ['a/gone.png'],
+      deleted: [],
+      orphans: ['a/gone.png'],
     });
     expect(await readFile(path.join(config.expectedDir, 'a/changed.png'), 'utf8')).toBe('new');
     expect(await readFile(path.join(config.expectedDir, 'b/added.png'), 'utf8')).toBe('fresh');
+    expect(existsSync(path.join(config.expectedDir, 'a/gone.png'))).toBe(true);
+  });
+
+  it('deletes orphaned baselines with prune', async () => {
+    const config = await makeFixture({
+      expected: { 'a/changed.png': 'old', 'a/gone.png': 'orphan' },
+      actual: { 'a/changed.png': 'new' },
+    });
+
+    const result = await approve(config, { prune: true });
+
+    expect(result).toEqual({
+      copied: ['a/changed.png'],
+      deleted: ['a/gone.png'],
+      orphans: [],
+    });
     expect(existsSync(path.join(config.expectedDir, 'a/gone.png'))).toBe(false);
   });
 
-  it('restricts both copies and deletions to keys matching the filter', async () => {
+  it('restricts both copies and pruning to keys matching the filter', async () => {
     const config = await makeFixture({
       expected: { 'a/gone.png': 'orphan', 'b/gone.png': 'orphan' },
       actual: { 'a/new.png': 'fresh', 'b/new.png': 'fresh' },
     });
 
-    const result = await approve(config, { filter: 'a/**' });
+    const result = await approve(config, { filter: 'a/**', prune: true });
 
-    expect(result).toEqual({ copied: ['a/new.png'], deleted: ['a/gone.png'] });
+    expect(result).toEqual({ copied: ['a/new.png'], deleted: ['a/gone.png'], orphans: [] });
     expect(existsSync(path.join(config.expectedDir, 'b/new.png'))).toBe(false);
     expect(existsSync(path.join(config.expectedDir, 'b/gone.png'))).toBe(true);
   });
@@ -83,9 +100,9 @@ describe('approve', () => {
       actual: { 'new.png': 'fresh' },
     });
 
-    const result = await approve(config, { dryRun: true });
+    const result = await approve(config, { prune: true, dryRun: true });
 
-    expect(result).toEqual({ copied: ['new.png'], deleted: ['gone.png'] });
+    expect(result).toEqual({ copied: ['new.png'], deleted: ['gone.png'], orphans: [] });
     expect(existsSync(path.join(config.expectedDir, 'new.png'))).toBe(false);
     expect(existsSync(path.join(config.expectedDir, 'gone.png'))).toBe(true);
   });

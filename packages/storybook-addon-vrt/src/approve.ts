@@ -6,18 +6,28 @@ import type { ResolvedVrtConfig } from './types';
 export type ApproveOptions = {
   /** Glob matched against screenshot keys; restricts copies AND deletions. */
   filter?: string;
+  /**
+   * Also delete expected files without an actual counterpart. Off by
+   * default: after a partial Vitest run the actual directory misses every
+   * story that simply was not executed, and pruning would silently delete
+   * their baselines.
+   */
+  prune?: boolean;
   dryRun?: boolean;
 };
 
 export type ApproveResult = {
   copied: string[];
+  /** Deleted orphaned baselines; only populated when `prune` is set. */
   deleted: string[];
+  /** Orphaned baselines left in place because `prune` was not set. */
+  orphans: string[];
 };
 
 /**
  * Promotes actual screenshots to expected baselines: copies every actual
- * over its expected counterpart and deletes expected files whose story no
- * longer produced a screenshot (orphans).
+ * over its expected counterpart. With `prune`, expected files whose story
+ * no longer produced a screenshot are deleted as well.
  */
 export async function approve(
   config: ResolvedVrtConfig,
@@ -31,7 +41,9 @@ export async function approve(
     options.filter === undefined || path.matchesGlob(key, options.filter);
 
   const copied = [...actual.keys()].filter(matches);
-  const deleted = [...expected.keys()].filter((key) => !actual.has(key) && matches(key));
+  const orphaned = [...expected.keys()].filter((key) => !actual.has(key) && matches(key));
+  const deleted = options.prune ? orphaned : [];
+  const orphans = options.prune ? [] : orphaned;
 
   if (!options.dryRun) {
     for (const key of copied) {
@@ -47,5 +59,5 @@ export async function approve(
     }
   }
 
-  return { copied, deleted };
+  return { copied, deleted, orphans };
 }

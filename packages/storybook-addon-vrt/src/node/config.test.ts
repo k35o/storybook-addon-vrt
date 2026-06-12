@@ -104,6 +104,27 @@ describe('resolveVrtConfig', () => {
     expect(() => resolveVrtConfig({ cwd })).toThrow(VrtConfigError);
   });
 
+  it('rejects out-of-range numeric options', async () => {
+    const cwd = await makeTmpDir();
+
+    expect(() => resolveVrtConfig({ cwd, inline: { threshold: 1.5 } })).toThrow(VrtConfigError);
+    expect(() => resolveVrtConfig({ cwd, inline: { allowedMismatchedPixelRatio: -0.1 } })).toThrow(
+      VrtConfigError,
+    );
+    expect(() => resolveVrtConfig({ cwd, inline: { allowedMismatchedPixels: -1 } })).toThrow(
+      VrtConfigError,
+    );
+    expect(() => resolveVrtConfig({ cwd, inline: { stability: { retries: 0 } } })).toThrow(
+      VrtConfigError,
+    );
+    expect(() => resolveVrtConfig({ cwd, inline: { stability: { interval: -5 } } })).toThrow(
+      VrtConfigError,
+    );
+    expect(() => resolveVrtConfig({ cwd, inline: { threshold: Number.NaN } })).toThrow(
+      VrtConfigError,
+    );
+  });
+
   it('throws when failOn contains an unknown category', async () => {
     const cwd = await makeTmpDir();
 

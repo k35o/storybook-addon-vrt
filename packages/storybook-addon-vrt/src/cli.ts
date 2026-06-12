@@ -110,12 +110,14 @@ cli
 cli
   .command('approve', 'Promote actual screenshots to expected baselines')
   .option('--filter <glob>', 'Only act on screenshot keys matching this glob')
+  .option('--prune', 'Also delete baselines whose story produced no screenshot')
   .option('--dry-run', 'Print operations without performing them')
-  .action(async (flags: SharedFlags & { filter?: string; dryRun?: boolean }) => {
+  .action(async (flags: SharedFlags & { filter?: string; prune?: boolean; dryRun?: boolean }) => {
     try {
       const config = resolveFromFlags(flags);
       const result = await approve(config, {
         ...(flags.filter !== undefined ? { filter: flags.filter } : {}),
+        ...(flags.prune !== undefined ? { prune: flags.prune } : {}),
         ...(flags.dryRun !== undefined ? { dryRun: flags.dryRun } : {}),
       });
       const prefix = flags.dryRun ? '[dry-run] ' : '';
@@ -125,9 +127,25 @@ cli
       for (const key of result.deleted) {
         console.info(styleText('magenta', `${prefix}delete ${key}`));
       }
-      console.info(
-        `${prefix}${result.copied.length} approved, ${result.deleted.length} orphaned baselines removed`,
-      );
+      let summary = `${prefix}${result.copied.length} approved`;
+      if (result.deleted.length > 0) {
+        summary += `, ${result.deleted.length} orphaned baselines removed`;
+      }
+      console.info(summary);
+      if (result.orphans.length > 0) {
+        console.warn(
+          styleText(
+            'yellow',
+            `${result.orphans.length} orphaned baseline(s) kept (no screenshot in this run):`,
+          ),
+        );
+        for (const key of result.orphans) {
+          console.warn(styleText('yellow', `  ● ${key}`));
+        }
+        console.warn(
+          styleText('yellow', 'Run "svrt approve --prune" after a FULL vitest run to delete them.'),
+        );
+      }
     } catch (error) {
       fail(error);
     }
