@@ -10,7 +10,7 @@ catalog:
   '@types/react': 19.2.15
   '@types/react-dom': 19.2.3
   '@vitejs/plugin-react': 6.0.2
-  '@vitest/browser-playwright': 4.1.7
+  '@vitest/browser-playwright': 4.1.9
   cac: 7.0.0
   pixelmatch: 7.2.0
   playwright: 1.60.0
@@ -21,7 +21,7 @@ catalog:
   typescript: 6.0.3
   vite: 8.0.14
   vite-plus: 0.1.24
-  vitest: 4.1.7
+  vitest: 4.1.9
 
 blockExoticSubdeps: true
 
