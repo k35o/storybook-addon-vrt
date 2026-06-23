@@ -40,6 +40,35 @@ describe('renderReportHtml', () => {
     expect(html).toContain('src/button.stories.tsx/Primary.png');
   });
 
+  it('renders a search field for filtering files and stories', () => {
+    const html = renderReportHtml(makeReport());
+
+    expect(html).toContain('id="search"');
+    expect(html).toContain('aria-label="Filter files and stories"');
+    // The query narrows the list against the combined file/story path.
+    expect(html).toContain('matchesTerms');
+  });
+
+  it('wires the search field as an accessible combobox over the list', () => {
+    const html = renderReportHtml(makeReport());
+
+    // Combobox over a listbox, with a polite live region for result counts.
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-controls="list"');
+    expect(html).toContain('role="listbox"');
+    expect(html).toContain('id="search-status"');
+    expect(html).toContain('aria-live="polite"');
+  });
+
+  it('splits the query on real whitespace, not the letter "s"', () => {
+    const html = renderReportHtml(makeReport());
+
+    // Inside the template literal a single backslash collapses, so the
+    // emitted regex must carry an escaped whitespace class.
+    expect(html).toContain('.split(/\\s+/)');
+    expect(html).not.toContain('.split(/s+/)');
+  });
+
   it('escapes closing script sequences inside the payload', () => {
     const report = makeReport();
     const item = report.items[0];

@@ -39,6 +39,11 @@ export function renderReportHtml(report: VrtReport): string {
     --primary: light-dark(oklch(0.575 0.145 180), oklch(0.84 0.16 180));
     --selected-bg: light-dark(oklch(0.945 0.058 180), oklch(0.37 0.078 180));
     --selected-fg: light-dark(oklch(0.41 0.098 180), oklch(0.9 0.11 180));
+    /* Search-match highlight: a yellow that reads on the plain sidebar
+       surface and on the teal selected row alike, so it never collides
+       with the selection tokens above. */
+    --mark-bg: light-dark(oklch(0.9 0.13 95), oklch(0.84 0.16 95));
+    --mark-fg: light-dark(oklch(0.32 0.07 80), oklch(0.28 0.07 80));
     --changed-fg: light-dark(oklch(0.49 0.22 25), oklch(0.84 0.15 25));
     --changed-bg: light-dark(oklch(0.975 0.016 25), oklch(0.37 0.14 25));
     --changed-bd: light-dark(oklch(0.9 0.084 25), oklch(0.49 0.22 25));
@@ -140,8 +145,7 @@ export function renderReportHtml(report: VrtReport): string {
     display: flex;
     flex-wrap: wrap;
     gap: 0.375rem;
-    padding: 0 1.5rem 1rem;
-    border-bottom: 1px solid var(--line-subtle);
+    padding: 0 1.5rem 0.75rem;
   }
   .chip {
     display: inline-flex;
@@ -162,6 +166,34 @@ export function renderReportHtml(report: VrtReport): string {
     border-color: var(--c-bd);
     color: var(--c-fg);
   }
+
+  .search {
+    padding: 0 1.5rem 1rem;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+  .search-box { position: relative; display: flex; align-items: center; }
+  .search-icon {
+    position: absolute;
+    left: 0.625rem;
+    color: var(--fg-subtle);
+    pointer-events: none;
+  }
+  .search input {
+    width: 100%;
+    padding: 0.4375rem 0.75rem 0.4375rem 2rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line);
+    background: var(--canvas);
+    color: var(--fg);
+    font: inherit;
+    font-size: 0.8125rem;
+    transition: border-color 150ms ease-out;
+  }
+  .search input::placeholder { color: var(--fg-subtle); }
+  .search input:hover { border-color: var(--fg-subtle); }
+  /* The native clear affordance is unstyled OS chrome; Escape clears the
+     query instead, so suppress it to keep the input on-palette. */
+  .search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
   .list {
     flex: 1;
@@ -189,7 +221,7 @@ export function renderReportHtml(report: VrtReport): string {
     transition: background-color 150ms ease-out, color 150ms ease-out;
   }
   .item:hover { background: var(--hover); }
-  .item[aria-current='true'] {
+  .item[aria-selected='true'] {
     background: var(--selected-bg);
     color: var(--selected-fg);
     font-weight: 450;
@@ -205,6 +237,32 @@ export function renderReportHtml(report: VrtReport): string {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  mark {
+    background: var(--mark-bg);
+    color: var(--mark-fg);
+    border-radius: 0.25rem;
+    /* No horizontal padding: it would change a name's advance width and
+       shift where an ellipsized row truncates as matches come and go. */
+    padding: 0;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .list-empty {
+    padding: 1.5rem 0.625rem;
+    color: var(--fg-subtle);
+    font-size: 0.75rem;
+    overflow-wrap: anywhere;
   }
 
   .side-foot {
@@ -411,9 +469,19 @@ export function renderReportHtml(report: VrtReport): string {
       <div class="meta" id="meta"></div>
     </div>
     <div class="filters" id="filters" role="group" aria-label="Filter by status"></div>
-    <nav class="list" id="list" aria-label="Screenshots"></nav>
+    <div class="search" role="search">
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="M10.5 10.5 14 14" stroke-linecap="round" />
+        </svg>
+        <input id="search" type="search" placeholder="Filter files and stories…" aria-label="Filter files and stories" role="combobox" aria-expanded="true" aria-controls="list" aria-autocomplete="list" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" />
+      </div>
+    </div>
+    <p class="sr-only" id="search-status" role="status" aria-live="polite"></p>
+    <nav class="list" id="list" role="listbox" aria-label="Screenshots"></nav>
     <div class="side-foot">
-      <span><kbd>↑</kbd> <kbd>↓</kbd> navigate · <kbd>1</kbd>–<kbd>3</kbd> mode</span>
+      <span><kbd>↑</kbd> <kbd>↓</kbd> navigate · <kbd>1</kbd>–<kbd>3</kbd> mode · <kbd>/</kbd> search</span>
     </div>
   </aside>
   <main class="detail" id="detail"></main>
@@ -434,6 +502,7 @@ export function renderReportHtml(report: VrtReport): string {
     ),
     selected: null,
     mode: 'side-by-side',
+    query: '',
   };
 
   const items = report.items.map((item) => {
@@ -445,8 +514,23 @@ export function renderReportHtml(report: VrtReport): string {
     };
   });
 
+  // Whitespace-separated terms are matched as a conjunction against the
+  // full "file/story" path, so "button primary" narrows to Primary inside
+  // any button file.
+  const queryTerms = () =>
+    state.query.toLowerCase().split(/\\s+/).filter(Boolean);
+
+  const matchesTerms = (item, terms) => {
+    if (terms.length === 0) return true;
+    const haystack = (item.file + '/' + item.name).toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  };
+
   function visibleItems() {
-    const filtered = items.filter((item) => state.visible.has(item.status));
+    const terms = queryTerms();
+    const filtered = items.filter(
+      (item) => state.visible.has(item.status) && matchesTerms(item, terms),
+    );
     const groups = new Map();
     for (const item of filtered) {
       if (!groups.has(item.file)) groups.set(item.file, []);
@@ -517,6 +601,32 @@ export function renderReportHtml(report: VrtReport): string {
     });
     filters.append(button);
   }
+
+  /* ---- search ---- */
+  const search = document.getElementById('search');
+  function applyQuery(value) {
+    state.query = value;
+    const flat = visibleItems();
+    if (!flat.some((item) => item.key === state.selected)) {
+      state.selected = flat[0]?.key ?? null;
+    }
+    render();
+  }
+  search.addEventListener('input', () => applyQuery(search.value));
+  search.addEventListener('keydown', (event) => {
+    // Arrow keys move through results without leaving the field; Escape
+    // clears a query, then blurs on a second press.
+    if (event.key === 'ArrowDown') { event.preventDefault(); move(1); }
+    if (event.key === 'ArrowUp') { event.preventDefault(); move(-1); }
+    if (event.key === 'Escape') {
+      if (search.value) {
+        search.value = '';
+        applyQuery('');
+      } else {
+        search.blur();
+      }
+    }
+  });
 
   /* ---- viewers ---- */
   const shot = (src) => {
@@ -589,26 +699,104 @@ export function renderReportHtml(report: VrtReport): string {
   };
 
   /* ---- render ---- */
+  // Wrap matched substrings in <mark> via text nodes only, so report keys
+  // never reach the DOM as markup.
+  function highlight(text, terms) {
+    const fragment = document.createDocumentFragment();
+    if (terms.length === 0) {
+      fragment.append(text);
+      return fragment;
+    }
+    const lower = text.toLowerCase();
+    let cursor = 0;
+    while (cursor < text.length) {
+      let at = -1;
+      let length = 0;
+      for (const term of terms) {
+        // Skipping empty terms keeps the cursor advancing; an empty match
+        // would leave length 0 and spin the loop forever.
+        if (term.length === 0) continue;
+        const index = lower.indexOf(term, cursor);
+        // On a tie, prefer the longer term so overlapping matches merge
+        // into one <mark> instead of fragmenting.
+        if (
+          index !== -1 &&
+          (at === -1 || index < at || (index === at && term.length > length))
+        ) {
+          at = index;
+          length = term.length;
+        }
+      }
+      if (at === -1 || length === 0) {
+        fragment.append(text.slice(cursor));
+        break;
+      }
+      if (at > cursor) fragment.append(text.slice(cursor, at));
+      const mark = document.createElement('mark');
+      mark.textContent = text.slice(at, at + length);
+      fragment.append(mark);
+      cursor = at + length;
+    }
+    return fragment;
+  }
+
+  // Attribute an empty list to the right cause: the query only when items
+  // survive the status filter, otherwise the status chips.
+  function emptyMessage() {
+    const statusOnly = items.filter((item) => state.visible.has(item.status));
+    return queryTerms().length > 0 && statusOnly.length > 0
+      ? 'No files or stories match “' + state.query + '”.'
+      : 'Nothing to show for the selected statuses.';
+  }
+
+  // Announce the result-set size politely so screen-reader users hear the
+  // list update. Guarded so navigating within a fixed set stays silent.
+  function syncStatus(count) {
+    const status = document.getElementById('search-status');
+    const message =
+      count === 0
+        ? emptyMessage()
+        : count + (count === 1 ? ' result' : ' results');
+    if (status.textContent !== message) status.textContent = message;
+  }
+
   function renderList() {
     const list = document.getElementById('list');
     list.replaceChildren();
+    const terms = queryTerms();
+    const flat = visibleItems();
+    syncStatus(flat.length);
+    if (flat.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'list-empty';
+      empty.textContent = emptyMessage();
+      list.append(empty);
+      search.removeAttribute('aria-activedescendant');
+      return;
+    }
     let currentFile = null;
-    for (const item of visibleItems()) {
+    let activeId = '';
+    flat.forEach((item, index) => {
       if (item.file !== currentFile) {
         currentFile = item.file;
         const label = document.createElement('div');
         label.className = 'file-label mono';
-        label.textContent = item.file;
+        label.setAttribute('role', 'presentation');
+        label.append(highlight(item.file, terms));
         list.append(label);
       }
       const button = document.createElement('button');
       button.className = 'item ' + item.status;
-      button.setAttribute('aria-current', String(item.key === state.selected));
+      button.id = 'opt-' + index;
+      button.setAttribute('role', 'option');
+      const selected = item.key === state.selected;
+      button.setAttribute('aria-selected', String(selected));
+      if (selected) activeId = button.id;
       const dot = document.createElement('span');
       dot.className = 'dot';
       const name = document.createElement('span');
       name.className = 'name';
-      name.textContent = item.name;
+      name.append(highlight(item.name, terms));
       name.title = item.name;
       button.append(dot, name);
       button.addEventListener('click', () => {
@@ -616,6 +804,13 @@ export function renderReportHtml(report: VrtReport): string {
         render();
       });
       list.append(button);
+    });
+    // Point the combobox at the active option so arrow-key moves from the
+    // search box are announced.
+    if (activeId) {
+      search.setAttribute('aria-activedescendant', activeId);
+    } else {
+      search.removeAttribute('aria-activedescendant');
     }
   }
 
@@ -627,9 +822,8 @@ export function renderReportHtml(report: VrtReport): string {
     if (!item) {
       const empty = document.createElement('p');
       empty.className = 'empty';
-      empty.textContent = flat.length === 0
-        ? 'Nothing to show for the selected statuses.'
-        : 'Select a screenshot from the list.';
+      empty.textContent =
+        flat.length !== 0 ? 'Select a screenshot from the list.' : emptyMessage();
       detail.append(empty);
       return;
     }
@@ -717,10 +911,16 @@ export function renderReportHtml(report: VrtReport): string {
     const next = index === -1 ? 0 : Math.min(Math.max(index + delta, 0), flat.length - 1);
     state.selected = flat[next].key;
     render();
-    document.querySelector('.item[aria-current="true"]')?.scrollIntoView({ block: 'nearest' });
+    document.querySelector('.item[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
   }
 
   window.addEventListener('keydown', (event) => {
+    if (event.key === '/' && !(event.target instanceof HTMLInputElement)) {
+      event.preventDefault();
+      search.focus();
+      search.select();
+      return;
+    }
     if (event.target instanceof HTMLInputElement) return;
     if (event.key === 'ArrowDown') { event.preventDefault(); move(1); }
     if (event.key === 'ArrowUp') { event.preventDefault(); move(-1); }
