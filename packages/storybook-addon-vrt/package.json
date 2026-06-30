@@ -1,6 +1,6 @@
 {
   "name": "storybook-addon-vrt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Self-contained visual regression testing for Storybook stories running on Vitest browser mode",
   "keywords": [
     "storybook-addon",
