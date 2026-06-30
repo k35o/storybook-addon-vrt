@@ -1,5 +1,11 @@
 # storybook-addon-vrt
 
+## 0.2.0
+
+### Minor Changes
+
+- [#8](https://github.com/k35o/storybook-addon-vrt/pull/8) [`5a0c2aa`](https://github.com/k35o/storybook-addon-vrt/commit/5a0c2aa2e022cc203a1ee90cbf133bac1564b093) Thanks [@k35o](https://github.com/k35o)! - Add a search box to the HTML report sidebar that filters the file-grouped screenshot list by file path and story name. Whitespace-separated terms match as a conjunction against the combined `file/story` path, matches are highlighted, and the field is keyboard accessible (`/` to focus, `Esc` to clear, arrow keys to navigate).
+
 ## 0.1.0
 
 ### Minor Changes
