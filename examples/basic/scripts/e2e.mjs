@@ -79,7 +79,7 @@ rmSync(path.join(expectedDir, KEYS.clicked)); // actual without baseline → add
 copyFileSync(
   path.join(expectedDir, KEYS.cardDefault),
   path.join(expectedDir, 'src/card.stories.tsx/Ghost.png'),
-); // baseline without actual → deleted
+); // baseline without actual → removed (full run)
 
 const exitCode = svrt('compare');
 assert(exitCode === 1, `compare with differences must exit 1 (got ${exitCode})`);
@@ -87,7 +87,7 @@ assert(exitCode === 1, `compare with differences must exit 1 (got ${exitCode})`)
 const report = JSON.parse(readFileSync(path.join(vrtDir, 'report.json'), 'utf8'));
 assert(report.summary.changed === 1, `expected 1 changed, got ${report.summary.changed}`);
 assert(report.summary.added === 1, `expected 1 added, got ${report.summary.added}`);
-assert(report.summary.deleted === 1, `expected 1 deleted, got ${report.summary.deleted}`);
+assert(report.summary.removed === 1, `expected 1 removed, got ${report.summary.removed}`);
 assert(existsSync(path.join(vrtDir, 'report.html')), 'report.html must be written');
 
 const changed = report.items.find((item) => item.status === 'changed');
