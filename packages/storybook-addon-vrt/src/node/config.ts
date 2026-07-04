@@ -6,7 +6,9 @@ export class VrtConfigError extends Error {
   override name = 'VrtConfigError';
 }
 
-const FAIL_ON_VALUES: VrtFailOn[] = ['changed', 'added', 'deleted'];
+const FAIL_ON_VALUES: VrtFailOn[] = ['changed', 'added', 'removed'];
+
+const DEFAULT_FULL_RUN_TRIGGERS = ['**/.storybook/**'];
 
 const DEFAULT_STABILITY: Required<VrtStabilityOptions> = {
   retries: 5,
@@ -26,6 +28,8 @@ const KNOWN_KEYS = new Set<string>([
   'allowedMismatchedPixels',
   'allowedMismatchedPixelRatio',
   'failOn',
+  'fullRunTriggers',
+  'project',
 ]);
 
 function assertType(
@@ -110,6 +114,25 @@ function validateOptions(options: VrtOptions, source: string): void {
       );
     }
   }
+  if (options.fullRunTriggers !== undefined) {
+    if (
+      !Array.isArray(options.fullRunTriggers) ||
+      options.fullRunTriggers.some((value) => typeof value !== 'string')
+    ) {
+      throw new VrtConfigError(
+        `Invalid value for "fullRunTriggers" in ${source}: expected an array of strings`,
+      );
+    }
+  }
+  if (
+    options.project !== undefined &&
+    typeof options.project !== 'string' &&
+    options.project !== false
+  ) {
+    throw new VrtConfigError(
+      `Invalid value for "project" in ${source}: expected a string or false`,
+    );
+  }
 }
 
 export function loadConfigFile(cwd: string, explicitPath?: string): VrtOptions | undefined {
@@ -178,11 +201,14 @@ export function resolveVrtConfig(input: ResolveVrtConfigInput = {}): ResolvedVrt
       ? path.resolve(cwd, merged.actualDir)
       : path.join(baseDir, 'actual'),
     diffDir: merged.diffDir ? path.resolve(cwd, merged.diffDir) : path.join(baseDir, 'diff'),
+    uncapturedDir: path.join(baseDir, 'uncaptured'),
     browserNameSuffix: merged.browserNameSuffix ?? false,
     stability,
     threshold: merged.threshold ?? 0.1,
     allowedMismatchedPixels: merged.allowedMismatchedPixels,
     allowedMismatchedPixelRatio: merged.allowedMismatchedPixelRatio,
     failOn: merged.failOn ?? [...FAIL_ON_VALUES],
+    fullRunTriggers: merged.fullRunTriggers ?? [...DEFAULT_FULL_RUN_TRIGGERS],
+    project: merged.project ?? 'storybook',
   };
 }

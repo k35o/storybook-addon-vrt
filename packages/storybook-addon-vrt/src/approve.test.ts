@@ -15,6 +15,7 @@ afterEach(async () => {
 async function makeFixture(files: {
   expected?: Record<string, string>;
   actual?: Record<string, string>;
+  uncaptured?: Record<string, string>;
 }): Promise<ResolvedVrtConfig> {
   const root = await mkdtemp(path.join(tmpdir(), 'vrt-approve-'));
   tmpDirs.push(root);
@@ -26,12 +27,15 @@ async function makeFixture(files: {
     expectedDir: path.join(baseDir, 'expected'),
     actualDir: path.join(baseDir, 'actual'),
     diffDir: path.join(baseDir, 'diff'),
+    uncapturedDir: path.join(baseDir, 'uncaptured'),
     browserNameSuffix: false,
     stability: { retries: 5, interval: 100, disableAnimations: true },
     threshold: 0.1,
     allowedMismatchedPixels: undefined,
     allowedMismatchedPixelRatio: undefined,
-    failOn: ['changed', 'added', 'deleted'],
+    failOn: ['changed', 'added', 'removed'],
+    fullRunTriggers: ['**/.storybook/**'],
+    project: 'storybook',
   };
   for (const [dir, entries] of [
     [config.expectedDir, files.expected ?? {}],
@@ -42,6 +46,11 @@ async function makeFixture(files: {
       await mkdir(path.dirname(filePath), { recursive: true });
       await writeFile(filePath, content);
     }
+  }
+  for (const [key, reason] of Object.entries(files.uncaptured ?? {})) {
+    const filePath = path.join(config.uncapturedDir, ...`${key}.json`.split('/'));
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, JSON.stringify({ reason }));
   }
   return config;
 }
@@ -92,6 +101,18 @@ describe('approve', () => {
     expect(result).toEqual({ copied: ['a/new.png'], deleted: ['a/gone.png'], orphans: [] });
     expect(existsSync(path.join(config.expectedDir, 'b/new.png'))).toBe(false);
     expect(existsSync(path.join(config.expectedDir, 'b/gone.png'))).toBe(true);
+  });
+
+  it('never prunes a baseline whose story ran but was intentionally not captured', async () => {
+    const config = await makeFixture({
+      expected: { 'flaky.png': 'baseline' },
+      uncaptured: { 'flaky.png': 'vrt-skip' },
+    });
+
+    const result = await approve(config, { prune: true });
+
+    expect(result).toEqual({ copied: [], deleted: [], orphans: [] });
+    expect(existsSync(path.join(config.expectedDir, 'flaky.png'))).toBe(true);
   });
 
   it('reports operations without touching files in dry-run mode', async () => {

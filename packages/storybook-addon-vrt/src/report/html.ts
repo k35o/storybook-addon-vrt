@@ -52,10 +52,18 @@ export function renderReportHtml(report: VrtReport): string {
     --added-bg: light-dark(oklch(0.975 0.02 180), oklch(0.37 0.078 180));
     --added-bd: light-dark(oklch(0.9 0.11 180), oklch(0.49 0.12 180));
     --added-dot: light-dark(oklch(0.66 0.165 180), oklch(0.75 0.175 180));
-    --deleted-fg: light-dark(oklch(0.49 0.135 90), oklch(0.84 0.2 90));
-    --deleted-bg: light-dark(oklch(0.975 0.03 90), oklch(0.37 0.085 90));
-    --deleted-bd: light-dark(oklch(0.9 0.148 90), oklch(0.49 0.135 90));
-    --deleted-dot: light-dark(oklch(0.66 0.18 90), oklch(0.75 0.2 90));
+    --removed-fg: light-dark(oklch(0.49 0.135 90), oklch(0.84 0.2 90));
+    --removed-bg: light-dark(oklch(0.975 0.03 90), oklch(0.37 0.085 90));
+    --removed-bd: light-dark(oklch(0.9 0.148 90), oklch(0.49 0.135 90));
+    --removed-dot: light-dark(oklch(0.66 0.18 90), oklch(0.75 0.2 90));
+    --skipped-fg: light-dark(oklch(0.55 0.02 280), oklch(0.78 0.03 280));
+    --skipped-bg: light-dark(oklch(0.965 0.008 280), oklch(0.34 0.02 280));
+    --skipped-bd: light-dark(oklch(0.88 0.02 280), oklch(0.46 0.03 280));
+    --skipped-dot: light-dark(oklch(0.68 0.03 280), oklch(0.7 0.04 280));
+    --carried-fg: light-dark(oklch(0.55 0.008 250), oklch(0.76 0.012 250));
+    --carried-bg: light-dark(oklch(0.965 0.004 250), oklch(0.33 0.008 250));
+    --carried-bd: light-dark(oklch(0.88 0.008 250), oklch(0.45 0.012 250));
+    --carried-dot: light-dark(oklch(0.7 0.012 250), oklch(0.66 0.014 250));
     --passed-fg: light-dark(oklch(0.49 0.18 150), oklch(0.84 0.175 150));
     --passed-bg: light-dark(oklch(0.975 0.02 150), oklch(0.37 0.108 150));
     --passed-bd: light-dark(oklch(0.9 0.1 150), oklch(0.49 0.18 150));
@@ -70,7 +78,9 @@ export function renderReportHtml(report: VrtReport): string {
   }
   .changed { --c-fg: var(--changed-fg); --c-bg: var(--changed-bg); --c-bd: var(--changed-bd); --c-dot: var(--changed-dot); }
   .added { --c-fg: var(--added-fg); --c-bg: var(--added-bg); --c-bd: var(--added-bd); --c-dot: var(--added-dot); }
-  .deleted { --c-fg: var(--deleted-fg); --c-bg: var(--deleted-bg); --c-bd: var(--deleted-bd); --c-dot: var(--deleted-dot); }
+  .removed { --c-fg: var(--removed-fg); --c-bg: var(--removed-bg); --c-bd: var(--removed-bd); --c-dot: var(--removed-dot); }
+  .skipped { --c-fg: var(--skipped-fg); --c-bg: var(--skipped-bg); --c-bd: var(--skipped-bd); --c-dot: var(--skipped-dot); }
+  .carried { --c-fg: var(--carried-fg); --c-bg: var(--carried-bg); --c-bd: var(--carried-bd); --c-dot: var(--carried-dot); }
   .passed { --c-fg: var(--passed-fg); --c-bg: var(--passed-bg); --c-bd: var(--passed-bd); --c-dot: var(--passed-dot); }
 
   * { box-sizing: border-box; }
@@ -490,16 +500,16 @@ export function renderReportHtml(report: VrtReport): string {
 <script>
 (() => {
   const report = JSON.parse(document.getElementById('report-data').textContent);
-  const STATUSES = ['changed', 'added', 'deleted', 'passed'];
+  const STATUSES = ['changed', 'added', 'removed', 'skipped', 'carried', 'passed'];
+  const REVIEW = ['changed', 'added', 'removed'];
   const MODES = ['side-by-side', 'slider', 'blink'];
-  const ORDER = { changed: 0, added: 1, deleted: 2, passed: 3 };
+  const ORDER = { changed: 0, added: 1, removed: 2, skipped: 3, carried: 4, passed: 5 };
+  const reviewCount = REVIEW.reduce((sum, s) => sum + report.summary[s], 0);
 
   const state = {
-    visible: new Set(
-      report.summary.changed + report.summary.added + report.summary.deleted > 0
-        ? STATUSES.filter((s) => s !== 'passed')
-        : STATUSES,
-    ),
+    // When there are findings, show only those; a clean run shows everything
+    // (passed plus any carried/skipped) so nothing looks hidden.
+    visible: new Set(reviewCount > 0 ? REVIEW : STATUSES),
     selected: null,
     mode: 'side-by-side',
     query: '',
@@ -546,7 +556,8 @@ export function renderReportHtml(report: VrtReport): string {
 
   /* ---- sidebar head ---- */
   const verdict = document.getElementById('verdict');
-  const review = report.summary.changed + report.summary.added + report.summary.deleted;
+  const review = reviewCount;
+  const notVerified = report.summary.skipped + report.summary.carried;
   if (review > 0) {
     const num = document.createElement('span');
     num.className = 'num';
@@ -557,7 +568,12 @@ export function renderReportHtml(report: VrtReport): string {
     );
   } else {
     verdict.classList.add('ok');
-    verdict.textContent = 'All ' + report.summary.total + ' passed';
+    // Never claim "all passed" when part of the suite was not verified.
+    const verified = report.summary.passed;
+    verdict.textContent =
+      notVerified > 0
+        ? verified + ' passed · ' + notVerified + ' not verified'
+        : 'All ' + report.summary.total + ' passed';
   }
 
   const ratio = document.getElementById('ratio');
@@ -571,8 +587,15 @@ export function renderReportHtml(report: VrtReport): string {
   }
 
   const meta = document.getElementById('meta');
+  const runLine =
+    report.run && report.run.mode === 'changed'
+      ? report.run.escalation
+        ? 'full run (escalated: ' + report.run.escalation.file + ')'
+        : 'incremental run' + (report.run.ref ? ' vs ' + report.run.ref : '')
+      : 'full run';
   for (const text of [
     new Date(report.createdAt).toLocaleString(),
+    runLine,
     'threshold ' + report.options.threshold + ' · fail on ' + report.options.failOn.join(', '),
   ]) {
     const div = document.createElement('div');
