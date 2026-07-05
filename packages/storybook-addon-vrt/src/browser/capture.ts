@@ -1,7 +1,33 @@
 import { page, server } from 'vitest/browser';
-import type { VrtRuntimeOptions, VrtStoryParameters } from '../types';
+import type { VrtRuntimeOptions, VrtStoryParameters, VrtUncapturedReason } from '../types';
 import { deriveKey } from './key';
 import { clearGlobalStoryContext, getStoryContext } from './story-context';
+
+// The browser context can write to disk through Vitest's built-in fs command
+// (paths resolve against the project root, so absolute paths land verbatim).
+type BrowserServerLike = {
+  browser: string;
+  commands?: { writeFile?: (path: string, content: string) => Promise<void> };
+};
+
+/**
+ * Records that a story ran but produced no screenshot, so `svrt compare` can
+ * tell an intentional skip / failed test apart from a genuinely deleted
+ * baseline. Best-effort: a marker write must never fail the user's test.
+ */
+async function writeUncapturedMarker(
+  options: VrtRuntimeOptions,
+  key: string,
+  reason: VrtUncapturedReason,
+): Promise<void> {
+  const writeFile = (server as unknown as BrowserServerLike).commands?.writeFile;
+  if (typeof writeFile !== 'function') return;
+  try {
+    await writeFile(`${options.uncapturedDir}/${key}.json`, JSON.stringify({ reason }));
+  } catch (error) {
+    console.warn(`[vrt] Could not write uncaptured marker for ${key}: ${String(error)}`);
+  }
+}
 
 type TaskLike = {
   name: string;
@@ -158,14 +184,6 @@ export async function captureStory(
   try {
     if (!story.isStory) return;
     const task = (ctx as HookContextLike).task;
-    if (task.mode !== undefined && task.mode !== 'run') return;
-    // A failing story would otherwise pollute the actual screenshots and
-    // show up as a bogus visual change.
-    if (task.result?.state === 'fail' || (task.result?.errors?.length ?? 0) > 0) {
-      return;
-    }
-    const parameters = story.parameters;
-    if (parameters.skip) return;
 
     const key = deriveKey({
       filePath: task.file?.filepath ?? '',
@@ -180,6 +198,24 @@ export async function captureStory(
       );
     }
     usedKeys.add(key);
+
+    // Stories that ran but are not captured get a marker with the reason, so
+    // compare keeps their baseline (never "removed") instead of failing.
+    if (task.mode !== undefined && task.mode !== 'run') {
+      await writeUncapturedMarker(options, key, 'test-skipped');
+      return;
+    }
+    // A failing story would otherwise pollute the actual screenshots and
+    // show up as a bogus visual change.
+    if (task.result?.state === 'fail' || (task.result?.errors?.length ?? 0) > 0) {
+      await writeUncapturedMarker(options, key, 'test-failed');
+      return;
+    }
+    const parameters = story.parameters;
+    if (parameters.skip) {
+      await writeUncapturedMarker(options, key, 'vrt-skip');
+      return;
+    }
 
     await document.fonts.ready;
     if (options.stability.disableAnimations) disableAnimations();

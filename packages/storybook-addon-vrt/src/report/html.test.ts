@@ -4,22 +4,26 @@ import { renderReportHtml } from './html';
 
 function makeReport(): VrtReport {
   return {
-    version: 1,
+    version: 2,
     createdAt: '2026-06-12T00:00:00.000Z',
-    options: { threshold: 0.1, failOn: ['changed', 'added', 'deleted'] },
+    run: { mode: 'full', ref: null, escalation: null },
+    options: { threshold: 0.1, failOn: ['changed', 'added', 'removed'] },
     dirs: { expected: 'expected', actual: 'actual', diff: 'diff' },
     summary: {
       total: 1,
       passed: 0,
       changed: 1,
       added: 0,
-      deleted: 0,
+      removed: 0,
+      skipped: 0,
+      carried: 0,
       failed: true,
     },
     items: [
       {
         key: 'src/button.stories.tsx/Primary.png',
         status: 'changed',
+        reason: 'pixel-diff',
         paths: {
           expected: 'expected/src/button.stories.tsx/Primary.png',
           actual: 'actual/src/button.stories.tsx/Primary.png',

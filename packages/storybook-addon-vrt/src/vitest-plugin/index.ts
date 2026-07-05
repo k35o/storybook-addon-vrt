@@ -69,6 +69,7 @@ export function vrt(options: VrtOptions = {}): Plugin {
         baseDir: toPosix(resolved.baseDir),
         actualDir: toPosix(resolved.actualDir),
         diffDir: toPosix(resolved.diffDir),
+        uncapturedDir: toPosix(resolved.uncapturedDir),
         browserNameSuffix: resolved.browserNameSuffix,
         stability: resolved.stability,
       };

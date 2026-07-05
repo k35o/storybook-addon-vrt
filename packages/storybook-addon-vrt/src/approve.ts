@@ -1,6 +1,6 @@
 import { copyFile, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { scanPngs } from './compare/scan';
+import { scanPngs, scanUncaptured } from './compare/scan';
 import type { ResolvedVrtConfig } from './types';
 
 export type ApproveOptions = {
@@ -33,15 +33,20 @@ export async function approve(
   config: ResolvedVrtConfig,
   options: ApproveOptions = {},
 ): Promise<ApproveResult> {
-  const [expected, actual] = await Promise.all([
+  const [expected, actual, uncaptured] = await Promise.all([
     scanPngs(config.expectedDir),
     scanPngs(config.actualDir),
+    scanUncaptured(config.uncapturedDir),
   ]);
   const matches = (key: string) =>
     options.filter === undefined || path.matchesGlob(key, options.filter);
 
   const copied = [...actual.keys()].filter(matches);
-  const orphaned = [...expected.keys()].filter((key) => !actual.has(key) && matches(key));
+  // A baseline whose story ran but was intentionally not captured (vrt.skip,
+  // failed/skipped test) is not an orphan — never prune it.
+  const orphaned = [...expected.keys()].filter(
+    (key) => !actual.has(key) && !uncaptured.has(key) && matches(key),
+  );
   const deleted = options.prune ? orphaned : [];
   const orphans = options.prune ? [] : orphaned;
 

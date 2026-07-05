@@ -31,8 +31,11 @@ describe('resolveVrtConfig', () => {
     expect(config.threshold).toBe(0.1);
     expect(config.allowedMismatchedPixels).toBeUndefined();
     expect(config.allowedMismatchedPixelRatio).toBeUndefined();
-    expect(config.failOn).toEqual(['changed', 'added', 'deleted']);
+    expect(config.failOn).toEqual(['changed', 'added', 'removed']);
     expect(config.browserNameSuffix).toBe(false);
+    expect(config.uncapturedDir).toBe(path.join(cwd, '.vrt', 'uncaptured'));
+    expect(config.fullRunTriggers).toEqual(['**/.storybook/**']);
+    expect(config.project).toBe('storybook');
     expect(config.stability).toEqual({
       retries: 5,
       interval: 100,
@@ -134,6 +137,29 @@ describe('resolveVrtConfig', () => {
         inline: { failOn: ['changed', 'broken'] as never },
       }),
     ).toThrow(VrtConfigError);
+  });
+
+  it('accepts and overrides fullRunTriggers and project', async () => {
+    const cwd = await makeTmpDir();
+
+    const config = resolveVrtConfig({
+      cwd,
+      inline: { fullRunTriggers: ['**/tokens/**', 'pnpm-lock.yaml'], project: false },
+    });
+
+    expect(config.fullRunTriggers).toEqual(['**/tokens/**', 'pnpm-lock.yaml']);
+    expect(config.project).toBe(false);
+  });
+
+  it('rejects a non-string fullRunTriggers entry and a bad project value', async () => {
+    const cwd = await makeTmpDir();
+
+    expect(() =>
+      resolveVrtConfig({ cwd, inline: { fullRunTriggers: ['ok', 5] as never } }),
+    ).toThrow(VrtConfigError);
+    expect(() => resolveVrtConfig({ cwd, inline: { project: 5 as never } })).toThrow(
+      VrtConfigError,
+    );
   });
 
   it('throws when an explicitly given config file is missing', async () => {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PNG } from 'pngjs';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ResolvedVrtConfig } from '../types';
+import type { ResolvedVrtConfig, VrtUncapturedReason } from '../types';
 import { runCompare } from './engine';
 
 type Rgba = [number, number, number, number];
@@ -41,6 +41,7 @@ async function makeFixture(
   files: {
     expected?: Record<string, Buffer>;
     actual?: Record<string, Buffer>;
+    uncaptured?: Record<string, VrtUncapturedReason>;
   },
   overrides: Partial<ResolvedVrtConfig> = {},
 ): Promise<ResolvedVrtConfig> {
@@ -54,12 +55,15 @@ async function makeFixture(
     expectedDir: path.join(baseDir, 'expected'),
     actualDir: path.join(baseDir, 'actual'),
     diffDir: path.join(baseDir, 'diff'),
+    uncapturedDir: path.join(baseDir, 'uncaptured'),
     browserNameSuffix: false,
     stability: { retries: 5, interval: 100, disableAnimations: true },
     threshold: 0.1,
     allowedMismatchedPixels: undefined,
     allowedMismatchedPixelRatio: undefined,
-    failOn: ['changed', 'added', 'deleted'],
+    failOn: ['changed', 'added', 'removed'],
+    fullRunTriggers: ['**/.storybook/**'],
+    project: 'storybook',
     ...overrides,
   };
   for (const [dir, entries] of [
@@ -71,6 +75,11 @@ async function makeFixture(
       await mkdir(path.dirname(filePath), { recursive: true });
       await writeFile(filePath, buffer);
     }
+  }
+  for (const [key, reason] of Object.entries(files.uncaptured ?? {})) {
+    const filePath = path.join(config.uncapturedDir, ...`${key}.json`.split('/'));
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, JSON.stringify({ reason }));
   }
   return config;
 }
@@ -90,9 +99,13 @@ describe('runCompare', () => {
       passed: 1,
       changed: 0,
       added: 0,
-      deleted: 0,
+      removed: 0,
+      skipped: 0,
+      carried: 0,
       failed: false,
     });
+    expect(report.version).toBe(2);
+    expect(report.run.mode).toBe('full');
     expect(report.items[0]).toEqual({
       key: 'a/story.png',
       status: 'passed',
@@ -195,7 +208,7 @@ describe('runCompare', () => {
     expect(existsSync(path.join(config.diffDir, 'story.png'))).toBe(true);
   });
 
-  it('classifies actual-only keys as added and expected-only keys as deleted', async () => {
+  it('classifies actual-only keys as added and expected-only keys as removed', async () => {
     const config = await makeFixture({
       expected: { 'gone.png': pngBuffer(2, 2) },
       actual: { 'new.png': pngBuffer(2, 2) },
@@ -206,16 +219,50 @@ describe('runCompare', () => {
     expect(report.items).toEqual([
       {
         key: 'gone.png',
-        status: 'deleted',
+        status: 'removed',
+        reason: 'no-capture',
         paths: { expected: 'expected/gone.png', actual: null, diff: null },
       },
       {
         key: 'new.png',
         status: 'added',
+        reason: 'new-story',
         paths: { expected: null, actual: 'actual/new.png', diff: null },
       },
     ]);
-    expect(report.summary).toMatchObject({ added: 1, deleted: 1, failed: true });
+    expect(report.summary).toMatchObject({ added: 1, removed: 1, failed: true });
+  });
+
+  it('carries an unexecuted baseline forward in changed mode instead of removing it', async () => {
+    const config = await makeFixture({ expected: { 'kept.png': pngBuffer(2, 2) } });
+
+    const report = await runCompare(config, { mode: 'changed', ref: 'origin/main' });
+
+    expect(report.items[0]).toEqual({
+      key: 'kept.png',
+      status: 'carried',
+      reason: 'not-selected',
+      paths: { expected: 'expected/kept.png', actual: null, diff: null },
+    });
+    expect(report.summary).toMatchObject({ carried: 1, removed: 0, failed: false });
+    expect(report.run).toMatchObject({ mode: 'changed', ref: 'origin/main' });
+  });
+
+  it('classifies a vrt.skip baseline as skipped, not removed, even in a full run (V6)', async () => {
+    const config = await makeFixture({
+      expected: { 'flaky.png': pngBuffer(2, 2) },
+      uncaptured: { 'flaky.png': 'vrt-skip' },
+    });
+
+    const report = await runCompare(config, { mode: 'full' });
+
+    expect(report.items[0]).toEqual({
+      key: 'flaky.png',
+      status: 'skipped',
+      reason: 'vrt-skip',
+      paths: { expected: 'expected/flaky.png', actual: null, diff: null },
+    });
+    expect(report.summary).toMatchObject({ skipped: 1, removed: 0, failed: false });
   });
 
   it('only fails on categories listed in failOn', async () => {

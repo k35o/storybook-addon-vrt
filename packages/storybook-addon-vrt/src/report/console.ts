@@ -1,17 +1,25 @@
 import { styleText } from 'node:util';
 import type { VrtReport, VrtStatus } from '../types';
 
-const STATUS_STYLE: Record<Exclude<VrtStatus, 'passed'>, Parameters<typeof styleText>[0]> = {
+type Color = Parameters<typeof styleText>[0];
+
+const STATUS_STYLE: Record<Exclude<VrtStatus, 'passed'>, Color> = {
   changed: 'red',
   added: 'cyan',
-  deleted: 'magenta',
+  removed: 'magenta',
+  skipped: 'yellow',
+  carried: 'gray',
 };
+
+// Statuses listed item-by-item; the rest (skipped/carried) can be numerous, so
+// they are only summarised, never enumerated.
+const ITEMIZED = ['changed', 'added', 'removed'] as const;
 
 export function formatReportSummary(report: VrtReport): string {
   const { summary } = report;
   const lines: string[] = [];
 
-  for (const status of ['changed', 'added', 'deleted'] as const) {
+  for (const status of ITEMIZED) {
     const items = report.items.filter((item) => item.status === status);
     if (items.length === 0) continue;
     lines.push(styleText(STATUS_STYLE[status], `${status}:`));
@@ -29,9 +37,23 @@ export function formatReportSummary(report: VrtReport): string {
     styleText('green', `${summary.passed} passed`),
     styleText(summary.changed > 0 ? 'red' : 'dim', `${summary.changed} changed`),
     styleText(summary.added > 0 ? 'cyan' : 'dim', `${summary.added} added`),
-    styleText(summary.deleted > 0 ? 'magenta' : 'dim', `${summary.deleted} deleted`),
-  ].join(styleText('dim', ' | '));
-  lines.push(`${counts} ${styleText('dim', `(${summary.total} total)`)}`);
+    styleText(summary.removed > 0 ? 'magenta' : 'dim', `${summary.removed} removed`),
+  ];
+  if (summary.skipped > 0) counts.push(styleText('yellow', `${summary.skipped} skipped`));
+  if (summary.carried > 0) counts.push(styleText('gray', `${summary.carried} carried`));
+  lines.push(
+    `${counts.join(styleText('dim', ' | '))} ${styleText('dim', `(${summary.total} total)`)}`,
+  );
+
+  if (summary.carried > 0) {
+    lines.push(
+      styleText(
+        'dim',
+        `${summary.carried} baseline(s) not selected by --changed — not verified this run; a full run is the backstop.`,
+      ),
+    );
+  }
+
   lines.push(
     summary.failed
       ? styleText(['red', 'bold'], 'VRT failed')
