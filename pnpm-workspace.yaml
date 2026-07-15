@@ -5,7 +5,7 @@ packages:
 catalog:
   '@storybook/addon-vitest': 10.4.6
   '@storybook/react-vite': 10.4.6
-  '@types/node': 24.13.2
+  '@types/node': 24.13.3
   '@types/pngjs': 6.0.5
   '@types/react': 19.2.17
   '@types/react-dom': 19.2.3
