@@ -2,7 +2,15 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {
-    ignorePatterns: ['**/dist/**', '**/storybook-static/**', '**/CHANGELOG.md', '**/.vrt/**'],
+    // .changeset (ledger.yaml etc.) is generated and owned by pnpm, so our
+    // formatting rules must not apply to it.
+    ignorePatterns: [
+      '**/dist/**',
+      '**/storybook-static/**',
+      '**/CHANGELOG.md',
+      '**/.vrt/**',
+      '.changeset',
+    ],
     singleQuote: true,
     overrides: [
       {
@@ -16,7 +24,13 @@ export default defineConfig({
     ],
   },
   lint: {
-    ignorePatterns: ['**/dist/**', '**/storybook-static/**', '**/CHANGELOG.md', '**/.vrt/**'],
+    ignorePatterns: [
+      '**/dist/**',
+      '**/storybook-static/**',
+      '**/CHANGELOG.md',
+      '**/.vrt/**',
+      '.changeset',
+    ],
   },
   staged: {
     '*.{js,ts,cjs,mjs,jsx,tsx,json,jsonc,yaml,yml,md}': 'vp check --fix',
