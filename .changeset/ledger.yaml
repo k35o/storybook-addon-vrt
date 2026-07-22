@@ -1,0 +1,4 @@
+storybook-addon-vrt@0.2.1:
+  dir: packages/storybook-addon-vrt
+  intents:
+    - switch-release-automation
