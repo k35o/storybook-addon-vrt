@@ -25,6 +25,10 @@ catalog:
 
 blockExoticSubdeps: true
 
+versioning:
+  changelog:
+    storage: repository
+
 allowBuilds:
   esbuild: false
 
