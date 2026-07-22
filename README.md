@@ -25,5 +25,10 @@ pnpm storybook   # run the example's Storybook
 
 ## Release
 
-Changesets-based. Add a changeset with `pnpm changeset`; merging to `main`
-opens/updates the release PR, and merging that publishes to npm.
+Versioning and publishing use
+[pnpm's built-in release management](https://pnpm.io/versioning), driven in CI
+by [k35o/pnpm-release-action](https://github.com/k35o/pnpm-release-action)
+(`.github/workflows/release.yml`). Add a change intent with `pnpm change`
+(changesets-format `.changeset/*.md`); merging to `main` opens/updates the
+release PR (branch `pnpm-release/main`), and merging that publishes to npm via
+OIDC trusted publishing.
