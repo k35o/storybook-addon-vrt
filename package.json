@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter storybook-addon-vrt build",
+    "build": "pnpm -r build",
     "test": "pnpm --filter storybook-addon-vrt test",
     "e2e": "pnpm build && pnpm --filter example-basic e2e",
     "typecheck": "pnpm -r typecheck",

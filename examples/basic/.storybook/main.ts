@@ -1,7 +1,7 @@
 import type { StorybookConfig } from '@storybook/react-vite';
 
 export default {
-  addons: ['@storybook/addon-vitest'],
+  addons: ['@storybook/addon-vitest', 'storybook-addon-vrt-live'],
   framework: {
     name: '@storybook/react-vite',
     options: {},

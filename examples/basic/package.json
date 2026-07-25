@@ -27,6 +27,7 @@
     "playwright": "catalog:",
     "storybook": "catalog:",
     "storybook-addon-vrt": "workspace:*",
+    "storybook-addon-vrt-live": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",

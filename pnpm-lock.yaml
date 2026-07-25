@@ -114,6 +114,9 @@ importers:
       storybook-addon-vrt:
         specifier: workspace:*
         version: link:../../packages/storybook-addon-vrt
+      storybook-addon-vrt-live:
+        specifier: workspace:*
+        version: link:../../packages/storybook-addon-vrt-live
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -157,6 +160,86 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1))
+      vrt-core:
+        specifier: workspace:*
+        version: link:../vrt-core
+
+  packages/storybook-addon-vrt-live:
+    dependencies:
+      cac:
+        specifier: 'catalog:'
+        version: 7.0.0
+      pixelmatch:
+        specifier: 'catalog:'
+        version: 7.2.0
+      pngjs:
+        specifier: 'catalog:'
+        version: 7.0.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/pngjs':
+        specifier: 'catalog:'
+        version: 6.0.5
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.17)
+      playwright:
+        specifier: 'catalog:'
+        version: 1.61.1
+      react:
+        specifier: 'catalog:'
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
+      storybook:
+        specifier: 'catalog:'
+        version: 10.5.2(@types/react@19.2.17)(prettier@2.8.8)(react@19.2.7)(vite-plus@0.2.5(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(esbuild@0.28.1)(typescript@6.0.3)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)))
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.5(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(esbuild@0.28.1)(typescript@6.0.3)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(@vitest/browser-preview@4.1.10)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1))
+      vrt-core:
+        specifier: workspace:*
+        version: link:../vrt-core
+
+  packages/vrt-core:
+    dependencies:
+      pixelmatch:
+        specifier: 'catalog:'
+        version: 7.2.0
+      pngjs:
+        specifier: 'catalog:'
+        version: 7.0.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/pngjs':
+        specifier: 'catalog:'
+        version: 6.0.5
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.5(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(esbuild@0.28.1)(typescript@6.0.3)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1))
 
 packages:
 
