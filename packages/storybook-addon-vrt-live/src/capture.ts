@@ -33,13 +33,6 @@ export type CaptureOutcome =
   | { captured: true; png: Buffer; stabilized: boolean }
   | { captured: false; reason: 'skip' };
 
-/**
- * Drives a warm, headless Playwright browser to a Storybook story URL and
- * captures a stabilized screenshot — the same rendering pipeline that produces
- * the baseline, so an unchanged story compares byte-identical. Keeps the
- * browser alive across captures (launch is the expensive part); pages are
- * cheap and created per capture so concurrent calls never fight over one page.
- */
 export type LiveCapturerOptions = {
   viewport?: { width: number; height: number };
   /**
@@ -52,6 +45,24 @@ export type LiveCapturerOptions = {
   launch?: () => Promise<Browser>;
 };
 
+/**
+ * Drives a warm, headless Playwright browser to a Storybook story URL and
+ * captures a stabilized screenshot. The browser is reused across captures
+ * (launching is the expensive part); contexts are per-capture and disposable.
+ *
+ * Rasterising the DOM in the page instead (modern-screenshot, html2canvas)
+ * would need no browser process at all, and was measured as a real option:
+ * both are deterministic (two passes over the same DOM differ by zero pixels)
+ * and close to the real render (0.1–0.7% of pixels), at 8–70ms against ~350ms
+ * here and ~195MB of resident Chromium. It was still rejected: neither
+ * rasteriser *is* the renderer, so what the panel shows is a re-drawing rather
+ * than the page — modern-screenshot already sized one example story 1px short,
+ * which a pixel diff reports as a dimension change. The sample was also
+ * deliberately simple; filters, shadows, web fonts and cross-origin images are
+ * where these libraries are known to diverge, and a visual-diff tool that
+ * invents differences is worse than a slower one. `launch` is injectable, so
+ * swapping the capture backend later stays a local change.
+ */
 export class LiveCapturer {
   // The *promise*, not the resolved browser: two overlapping captures both see
   // an unset field before the first launch resolves, and would each start a
