@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter storybook-addon-vrt test",
+    "test": "pnpm -r test",
     "e2e": "pnpm build && pnpm --filter example-basic e2e",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm -r check",
