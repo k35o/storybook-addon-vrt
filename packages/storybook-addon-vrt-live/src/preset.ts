@@ -5,6 +5,7 @@ import {
   type DiffRequest,
   type ScanRequest,
   type ScanRow,
+  type ScanScope,
   type SnapshotSetRequest,
   VRT_LIVE_REQUEST,
   VRT_LIVE_RESPONSE,
@@ -14,10 +15,11 @@ import {
   VRT_LIVE_SNAPSHOT_SET,
   VRT_LIVE_SNAPSHOT_SET_DONE,
 } from './channel';
+import { getChangedStoryIds, resolveStoryIndexInProcess } from './changed';
 import { comparePng } from './compare';
 import { buildDiffPayload } from './diff-runner';
 import { repoRoot } from './git';
-import { fetchStoryIndex } from './stories';
+import { fetchStoryIndex, type StoryEntry } from './stories';
 
 /** Baseline directory (repo-root-relative) that `svrt-live snapshot` commits to. */
 const BASELINE_DIR = '.vrt-live/baseline';
@@ -28,10 +30,18 @@ const BASELINE_DIR = '.vrt-live/baseline';
  * manager↔server channel. PNGs travel as base64 data URLs (built by
  * buildDiffPayload) because the channel is JSON-only.
  */
-export const experimental_serverChannel = async (channel: Channel): Promise<Channel> => {
+export const experimental_serverChannel = async (
+  channel: Channel,
+  options?: unknown,
+): Promise<Channel> => {
   const capturer = new LiveCapturer();
   const snapshots = new SnapshotStore();
   const root = repoRoot(process.cwd());
+
+  // Prefer the in-process story index (no loopback HTTP, in lock-step with HMR);
+  // fall back to fetching /index.json from the requesting origin.
+  const storyIndex = async (sbUrl: string): Promise<StoryEntry[]> =>
+    (await resolveStoryIndexInProcess(options)) ?? (await fetchStoryIndex(sbUrl));
 
   channel.on(VRT_LIVE_SNAPSHOT_SET, async (req: SnapshotSetRequest) => {
     let ok = false;
@@ -103,10 +113,32 @@ export const experimental_serverChannel = async (channel: Channel): Promise<Chan
 
   channel.on(VRT_LIVE_SCAN_REQUEST, async (req: ScanRequest) => {
     try {
-      const stories = await fetchStoryIndex(req.sbUrl);
+      const scope: ScanScope = req.scope ?? 'all';
+      const stories = await storyIndex(req.sbUrl);
+      let targets = stories;
+      let note: string | undefined;
+      if (scope === 'changed') {
+        // Delegate change detection to Storybook's own git + module-graph
+        // service; capture only the stories it flags new/modified/affected.
+        const changed = await getChangedStoryIds();
+        if (!changed.ready) {
+          channel.emit(VRT_LIVE_SCAN_RESPONSE, {
+            requestId: req.requestId,
+            rows: [],
+            scope,
+            note: `Scan all instead — ${changed.reason}`,
+          });
+          return;
+        }
+        targets = stories.filter((story) => changed.ids.has(story.id));
+        if (targets.length === 0) {
+          note =
+            'Storybook reports no changed stories. Edit a story or its component, or use Scan all.';
+        }
+      }
       const rows: ScanRow[] = [];
       let done = 0;
-      for (const story of stories) {
+      for (const story of targets) {
         let row: ScanRow;
         try {
           const shot = await capturer.capture({ sbUrl: req.sbUrl, storyId: story.id });
@@ -148,11 +180,16 @@ export const experimental_serverChannel = async (channel: Channel): Promise<Chan
         channel.emit(VRT_LIVE_SCAN_PROGRESS, {
           requestId: req.requestId,
           done,
-          total: stories.length,
+          total: targets.length,
           storyId: story.id,
         });
       }
-      channel.emit(VRT_LIVE_SCAN_RESPONSE, { requestId: req.requestId, rows });
+      channel.emit(VRT_LIVE_SCAN_RESPONSE, {
+        requestId: req.requestId,
+        rows,
+        scope,
+        ...(note ? { note } : {}),
+      });
     } catch (error) {
       channel.emit(VRT_LIVE_SCAN_RESPONSE, {
         requestId: req.requestId,

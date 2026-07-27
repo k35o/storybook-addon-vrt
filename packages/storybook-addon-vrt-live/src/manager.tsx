@@ -14,6 +14,7 @@ import {
   type ScanProgress,
   type ScanResponse,
   type ScanRow,
+  type ScanScope,
   VRT_LIVE_REQUEST,
   VRT_LIVE_RESPONSE,
   VRT_LIVE_SCAN_PROGRESS,
@@ -267,6 +268,8 @@ type ScanState = {
   busy: boolean;
   progress?: { done: number; total: number };
   rows?: ScanRow[];
+  scope?: ScanScope;
+  note?: string;
   error?: string;
 };
 
@@ -302,7 +305,13 @@ function Panel(): React.ReactElement {
     },
     [VRT_LIVE_SCAN_RESPONSE]: (r: ScanResponse) => {
       if (r.requestId !== String(reqId.current)) return;
-      setScan({ busy: false, rows: r.rows, ...(r.error ? { error: r.error } : {}) });
+      setScan({
+        busy: false,
+        rows: r.rows,
+        ...(r.scope ? { scope: r.scope } : {}),
+        ...(r.note ? { note: r.note } : {}),
+        ...(r.error ? { error: r.error } : {}),
+      });
     },
   });
 
@@ -333,15 +342,16 @@ function Panel(): React.ReactElement {
     setBusy('snapshot');
     send(VRT_LIVE_SNAPSHOT_SET, {});
   };
-  const scanAll = (): void => {
+  const runScan = (scope: ScanScope): void => {
     const id = String(++reqId.current);
-    setScan({ busy: true, progress: { done: 0, total: 0 } });
+    setScan({ busy: true, progress: { done: 0, total: 0 }, scope });
     setResult(null);
     setNote(null);
     emit(VRT_LIVE_SCAN_REQUEST, {
       requestId: id,
       sbUrl: window.location.origin,
       mode,
+      scope,
       ...(mode === 'ref' ? { ref } : {}),
     });
   };
@@ -403,26 +413,42 @@ function Panel(): React.ReactElement {
         <Button size="small" variant="solid" disabled={busy !== null} onClick={compare}>
           {busy === 'compare' ? 'Capturing…' : 'Compare'}
         </Button>
-        <Button size="small" variant="outline" disabled={scan.busy} onClick={scanAll}>
-          {scan.busy ? 'Scanning…' : 'Scan all'}
+        <Button
+          size="small"
+          variant="outline"
+          disabled={scan.busy}
+          onClick={() => runScan('changed')}
+        >
+          {scan.busy && scan.scope === 'changed' ? 'Scanning…' : 'Scan changed'}
+        </Button>
+        <Button size="small" variant="outline" disabled={scan.busy} onClick={() => runScan('all')}>
+          {scan.busy && scan.scope === 'all' ? 'Scanning…' : 'Scan all'}
         </Button>
         <span style={{ fontSize: 11, color: '#9ca3af' }}>{storyId}</span>
       </div>
 
-      {(scan.busy || scan.rows || scan.error) && (
+      {(scan.busy || scan.rows || scan.error || scan.note) && (
         <div style={{ marginTop: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
           {scan.busy ? (
             <p style={{ color: '#6b7280', fontSize: 13 }}>
-              Scanning {mode === 'ref' ? `vs ${ref}` : 'vs snapshots'}…
+              Scanning {scan.scope === 'changed' ? 'changed stories' : 'all stories'}{' '}
+              {mode === 'ref' ? `vs ${ref}` : 'vs snapshots'}…
               {scan.progress && scan.progress.total > 0
                 ? ` ${scan.progress.done}/${scan.progress.total}`
                 : ''}
             </p>
           ) : scan.error ? (
             <p style={{ color: '#d92d20', fontSize: 13 }}>Scan failed: {scan.error}</p>
-          ) : scan.rows ? (
-            <ScanList rows={scan.rows} onSelect={(id) => api.selectStory(id)} />
-          ) : null}
+          ) : (
+            <>
+              {scan.note && (
+                <p style={{ color: '#b45309', fontSize: 13, margin: '0 0 8px' }}>{scan.note}</p>
+              )}
+              {scan.rows && scan.rows.length > 0 && (
+                <ScanList rows={scan.rows} onSelect={(id) => api.selectStory(id)} />
+              )}
+            </>
+          )}
         </div>
       )}
 

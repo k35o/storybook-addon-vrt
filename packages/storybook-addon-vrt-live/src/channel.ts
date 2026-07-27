@@ -43,12 +43,17 @@ export type SnapshotSetResponse = {
   ok: boolean;
 };
 
-/** Manager → server: capture and compare every story to surface which differ. */
+/** `all` scans every story; `changed` scans only Storybook's changed set. */
+export type ScanScope = 'all' | 'changed';
+
+/** Manager → server: capture and compare stories to surface which differ. */
 export type ScanRequest = {
   requestId: string;
   sbUrl: string;
   mode: DiffMode;
   ref?: string;
+  /** @default 'all' */
+  scope?: ScanScope;
 };
 
 export type ScanRowStatus = CompareResult['status'] | 'skipped';
@@ -72,5 +77,9 @@ export type ScanProgress = {
 export type ScanResponse = {
   requestId: string;
   rows: ScanRow[];
+  /** Scope actually scanned (echoed for the panel's summary). */
+  scope?: ScanScope;
+  /** Non-fatal note, e.g. change detection unavailable or nothing changed. */
+  note?: string;
   error?: string;
 };

@@ -70,6 +70,12 @@ added), with a per-status summary. Click a row to jump to that story and see
 its diff. Stories with `parameters.vrt.skip` are counted as skipped, never
 shown as a difference.
 
+**Scan changed** captures only the stories Storybook flags as new / modified /
+affected — it reads Storybook 10's own change-detection status store (git +
+module graph), so editing a shared component scans just the stories that use
+it. When change detection is unavailable it says so and you fall back to
+**Scan all**.
+
 ### Baselines for git-ref mode
 
 Baselines live in `.vrt-live/baseline/<storyId>.png`, committed to git. Generate
