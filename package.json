@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter \"./packages/*\" test",
     "e2e": "pnpm build && pnpm --filter example-basic e2e",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm -r check",
