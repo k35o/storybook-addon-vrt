@@ -28,7 +28,6 @@ describe('buildDiffPayload', () => {
       baseline: null,
       current: WHITE,
       stabilized: true,
-      source: { mode: 'ref', ref: 'HEAD' },
     });
     expect(payload.status).toBe('added');
     expect(payload.baseline).toBeNull();
@@ -43,7 +42,6 @@ describe('buildDiffPayload', () => {
       baseline: WHITE,
       current: solid(6, 6, [255, 255, 255]),
       stabilized: true,
-      source: { mode: 'snapshot' },
     });
     expect(payload.status).toBe('passed');
     expect(payload.baseline).toMatch(/^data:image\/png;base64,/);
@@ -56,7 +54,6 @@ describe('buildDiffPayload', () => {
       baseline: WHITE,
       current: solid(6, 6, [0, 0, 0]),
       stabilized: true,
-      source: { mode: 'snapshot' },
     });
     expect(payload.status).toBe('changed');
     expect(payload.diff).toMatch(/^data:image\/png;base64,/);

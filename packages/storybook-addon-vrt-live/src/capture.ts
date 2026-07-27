@@ -40,17 +40,51 @@ export type CaptureOutcome =
  * browser alive across captures (launch is the expensive part); pages are
  * cheap and created per capture so concurrent calls never fight over one page.
  */
-export class LiveCapturer {
-  #browser: Browser | undefined;
-  readonly #viewport: { width: number; height: number };
+export type LiveCapturerOptions = {
+  viewport?: { width: number; height: number };
+  /**
+   * Close the browser after this long without a capture, so a day-long dev
+   * session does not hold a Chromium process open forever. Set 0 to disable.
+   * @default 300_000
+   */
+  idleTimeoutMs?: number;
+  /** Test seam: how the browser is launched. */
+  launch?: () => Promise<Browser>;
+};
 
-  constructor(options: { viewport?: { width: number; height: number } } = {}) {
+export class LiveCapturer {
+  // The *promise*, not the resolved browser: two overlapping captures both see
+  // an unset field before the first launch resolves, and would each start a
+  // Chromium — the second overwriting (and orphaning) the first.
+  #browser: Promise<Browser> | undefined;
+  #idleTimer: ReturnType<typeof setTimeout> | undefined;
+  readonly #viewport: { width: number; height: number };
+  readonly #idleTimeoutMs: number;
+  readonly #launch: () => Promise<Browser>;
+
+  constructor(options: LiveCapturerOptions = {}) {
     this.#viewport = options.viewport ?? { width: 1280, height: 720 };
+    this.#idleTimeoutMs = options.idleTimeoutMs ?? 300_000;
+    this.#launch = options.launch ?? (() => chromium.launch({ headless: true }));
   }
 
   async #getBrowser(): Promise<Browser> {
-    if (!this.#browser) this.#browser = await chromium.launch({ headless: true });
+    if (!this.#browser) {
+      this.#browser = this.#launch().catch((error: unknown) => {
+        this.#browser = undefined; // never cache a failed launch
+        throw error;
+      });
+    }
     return this.#browser;
+  }
+
+  #restartIdleTimer(): void {
+    if (this.#idleTimer) clearTimeout(this.#idleTimer);
+    this.#idleTimer = undefined;
+    if (this.#idleTimeoutMs <= 0) return;
+    this.#idleTimer = setTimeout(() => void this.close(), this.#idleTimeoutMs);
+    // Must not hold the dev server open.
+    this.#idleTimer.unref?.();
   }
 
   async capture(options: CaptureOptions): Promise<CaptureOutcome> {
@@ -58,6 +92,7 @@ export class LiveCapturer {
     // Explicit skip is honored before spending a page load.
     if (passed.skip) return { captured: false, reason: 'skip' };
 
+    if (this.#idleTimer) clearTimeout(this.#idleTimer);
     const stability: StabilityOptions = { ...DEFAULT_STABILITY, ...options.stability };
     const browser = await this.#getBrowser();
     const context = await browser.newContext({
@@ -83,8 +118,8 @@ export class LiveCapturer {
       await waitStoryReady(page);
 
       // Merge the story's own `parameters.vrt` (published to a global by the
-      // preview annotation) with any explicit override, so the snapshot bin
-      // and the live panel apply identical mask/remove/delay.
+      // preview annotation) with any explicit override, so the baseline and the
+      // live capture apply identical mask/remove/delay.
       const parameters = { ...(await readStoryParameters(page)), ...passed };
       if (parameters.skip) return { captured: false, reason: 'skip' };
 
@@ -101,12 +136,21 @@ export class LiveCapturer {
       return { captured: true, png, stabilized };
     } finally {
       await context.close();
+      this.#restartIdleTimer();
     }
   }
 
   async close(): Promise<void> {
-    await this.#browser?.close();
+    if (this.#idleTimer) clearTimeout(this.#idleTimer);
+    this.#idleTimer = undefined;
+    const pending = this.#browser;
     this.#browser = undefined;
+    if (!pending) return;
+    try {
+      await (await pending).close();
+    } catch {
+      // Already gone, or the launch itself failed — nothing to clean up.
+    }
   }
 }
 

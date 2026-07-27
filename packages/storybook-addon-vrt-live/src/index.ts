@@ -1,13 +1,8 @@
 export { LiveCapturer } from './capture';
-export type { CaptureOptions, CaptureOutcome } from './capture';
+export type { CaptureOptions, CaptureOutcome, LiveCapturerOptions } from './capture';
 export { comparePng } from './compare';
 export type { CompareOptions, ComparePngResult } from './compare';
-export { listFilesAtRef, readFileAtRef, refExists, repoRoot, resolveRef } from './git';
-export { fetchStoryIndex } from './stories';
-export type { StoryEntry } from './stories';
-export { captureBaseline } from './snapshot';
-export type { SnapshotSummary } from './snapshot';
 export { buildDiffPayload, toDataUrl } from './diff-runner';
 export type { DiffPayload } from './diff-runner';
-export { baselineAbsPath, baselineRefPath, refBaseline, SnapshotStore } from './baseline';
+export { SnapshotStore } from './snapshot-store';
 export type { CompareResult, StabilityOptions, VrtStoryParameters } from './types';

@@ -6,14 +6,12 @@ export function toDataUrl(png: Buffer): string {
 }
 
 /**
- * The result the panel renders: the compare verdict plus the three images as
- * data URLs (the manager↔server channel is JSON-only, so PNG bytes travel as
- * base64). `baseline`/`diff` are null when there is nothing to show.
+ * What the panel renders: the verdict plus the images as data URLs. The
+ * manager↔server channel is JSON-only, so PNG bytes travel as base64.
+ * `baseline`/`diff` are null when there is nothing to show.
  */
 export type DiffPayload = CompareResult & {
   storyId: string;
-  /** How the baseline was obtained, for the panel's provenance line. */
-  source: { mode: 'snapshot'; capturedAt?: string } | { mode: 'ref'; ref: string };
   /** Whether the current capture reached a stable frame. */
   stabilized: boolean;
   baseline: string | null;
@@ -22,23 +20,21 @@ export type DiffPayload = CompareResult & {
 };
 
 /**
- * Compares an already-captured current image against an already-resolved
- * baseline and packages the result for the panel. Pure over its inputs so it
- * is trivially testable; the caller owns capture and baseline resolution.
+ * Compares an already-captured render against the story's baseline and packages
+ * the result for the panel. Pure over its inputs so it is trivially testable;
+ * the caller owns capture and baseline lookup.
  */
 export function buildDiffPayload(input: {
   storyId: string;
   baseline: Buffer | null;
   current: Buffer;
   stabilized: boolean;
-  source: DiffPayload['source'];
   compare?: CompareOptions;
 }): DiffPayload {
   const result = comparePng(input.baseline, input.current, input.compare);
   return {
     ...result,
     storyId: input.storyId,
-    source: input.source,
     stabilized: input.stabilized,
     baseline: input.baseline === null ? null : toDataUrl(input.baseline),
     current: toDataUrl(input.current),

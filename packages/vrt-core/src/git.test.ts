@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listFilesAtRef, readFileAtRef, refExists, repoRoot, resolveRef } from './git';
+import { isSafeRef, listFilesAtRef, readFileAtRef, refExists, repoRoot, resolveRef } from './git';
 
 const tmpDirs: string[] = [];
 
@@ -94,5 +95,45 @@ describe('git ref helpers', () => {
 
     const listed = listFilesAtRef(dir, 'HEAD', 'baseline');
     expect(listed).toEqual(['baseline/A.png', 'baseline/B.png']);
+  });
+});
+
+describe('ref validation', () => {
+  it('accepts real revision syntax', () => {
+    for (const ref of [
+      'HEAD',
+      'main',
+      'origin/main',
+      'v1.0-rc1',
+      'feature/a-b',
+      'HEAD~1',
+      'a1b2c3d',
+    ]) {
+      expect(isSafeRef(ref), ref).toBe(true);
+    }
+  });
+
+  it('rejects option-shaped, empty and whitespace refs', () => {
+    for (const ref of ['', '-x', '--help', '--output=/tmp/x', 'a b', 'a\nb', 'a\tb']) {
+      expect(isSafeRef(ref), JSON.stringify(ref)).toBe(false);
+    }
+  });
+
+  it('never lets an option-shaped ref reach git, so no file is written', async () => {
+    const dir = await makeRepo();
+    await writeFile(path.join(dir, 'a.txt'), 'x');
+    run(dir, ['add', '.']);
+    run(dir, ['commit', '-q', '-m', 'c']);
+
+    // Unguarded, `git show --output=<target>:a.txt` treats the ref as a flag
+    // and writes `<target>:a.txt` to disk.
+    const target = path.join(dir, 'pwned');
+    expect(readFileAtRef(dir, `--output=${target}`, 'a.txt')).toBeNull();
+    expect(existsSync(`${target}:a.txt`)).toBe(false);
+
+    expect(refExists(dir, '--help')).toBe(false);
+    expect(resolveRef(dir, '-x')).toBeNull();
+    expect(listFilesAtRef(dir, `--output=${target}`, 'a.txt')).toEqual([]);
+    expect(existsSync(`${target}:a.txt`)).toBe(false);
   });
 });

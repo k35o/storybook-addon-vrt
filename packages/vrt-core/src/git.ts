@@ -25,6 +25,29 @@ function git(cwd: string, args: string[]): GitResult {
   }
 }
 
+/**
+ * Whether a revision string is safe to pass to git as a positional argument.
+ *
+ * `execFile` never invokes a shell, so there is no shell injection here — but a
+ * revision is still passed as its own argv entry, and git reads any entry
+ * starting with `-` as an option. A ref of `--output=/tmp/x` therefore turns
+ * `git show <ref>:<path>` into a file-writing flag. Refs reach these helpers
+ * from user input (a panel text field, a CLI flag), so every helper validates
+ * first. Whitespace and control characters are rejected for the same reason.
+ */
+export function isSafeRef(ref: string): boolean {
+  // Hyphens, dots and slashes are legitimate inside a ref (`feature/a-b`,
+  // `v1.0-rc1`) — only a *leading* hyphen is the problem. Checked by code
+  // point rather than a regex so the intent (reject control characters and
+  // whitespace) is explicit, and no lint suppression is needed.
+  if (ref.length === 0 || ref.startsWith('-')) return false;
+  for (const char of ref) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x20 || code === 0x7f) return false;
+  }
+  return true;
+}
+
 export function isInsideWorkTree(cwd: string): boolean {
   return git(cwd, ['rev-parse', '--is-inside-work-tree']).stdout.trim() === 'true';
 }
@@ -37,11 +60,13 @@ export function repoRoot(cwd: string): string | null {
 
 /** Whether the ref resolves to a commit that exists in this (possibly shallow) clone. */
 export function refExists(cwd: string, ref: string): boolean {
+  if (!isSafeRef(ref)) return false;
   return git(cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).ok;
 }
 
 /** Short SHA a ref currently points at, or null. */
 export function resolveRef(cwd: string, ref: string): string | null {
+  if (!isSafeRef(ref)) return null;
   const result = git(cwd, ['rev-parse', '--short', `${ref}^{commit}`]);
   return result.ok ? result.stdout.trim() : null;
 }
@@ -53,6 +78,7 @@ export function resolveRef(cwd: string, ref: string): string | null {
  * diff against nothing and pass green — the caller must fall back to a full run.
  */
 export function mergeBase(cwd: string, ref: string): string | null {
+  if (!isSafeRef(ref)) return null;
   const result = git(cwd, ['merge-base', ref, 'HEAD']);
   if (!result.ok) return null;
   const sha = result.stdout.trim();
@@ -91,6 +117,7 @@ export function changedFiles(repoRootDir: string, diffAgainst: string | null): s
  * at that ref (a story with no baseline yet) or git failed.
  */
 export function readFileAtRef(cwd: string, ref: string, path: string): Buffer | null {
+  if (!isSafeRef(ref)) return null;
   try {
     return execFileSync('git', ['show', `${ref}:${path}`], {
       cwd,
@@ -108,6 +135,7 @@ export function readFileAtRef(cwd: string, ref: string, path: string): Buffer | 
  * via `git ls-tree -r --name-only`. Empty when the ref/dir has none.
  */
 export function listFilesAtRef(cwd: string, ref: string, dir: string): string[] {
+  if (!isSafeRef(ref)) return [];
   const result = git(cwd, ['ls-tree', '-r', '--name-only', ref, '--', dir]);
   if (!result.ok) return [];
   return result.stdout

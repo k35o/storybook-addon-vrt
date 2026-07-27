@@ -1,28 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AddonPanel, Button } from 'storybook/internal/components';
+import { addons, types, useChannel, useParameter, useStorybookState } from 'storybook/manager-api';
 import {
-  addons,
-  types,
-  useChannel,
-  useParameter,
-  useStorybookApi,
-  useStorybookState,
-} from 'storybook/manager-api';
-import {
-  type DiffMode,
   type DiffResponse,
-  type ScanProgress,
-  type ScanResponse,
-  type ScanRow,
-  type ScanScope,
+  type SnapshotSetResponse,
   VRT_LIVE_REQUEST,
   VRT_LIVE_RESPONSE,
-  VRT_LIVE_SCAN_PROGRESS,
-  VRT_LIVE_SCAN_REQUEST,
-  VRT_LIVE_SCAN_RESPONSE,
   VRT_LIVE_SNAPSHOT_SET,
   VRT_LIVE_SNAPSHOT_SET_DONE,
 } from './channel';
+import { classifyResponse, type Pending } from './correlation';
 import type { VrtStoryParameters } from './types';
 
 const ADDON_ID = 'storybook-addon-vrt-live';
@@ -138,17 +125,15 @@ function Result({ data }: { data: DiffResponse }): React.ReactElement {
     return <p style={{ color: '#d92d20' }}>Capture failed: {data.error}</p>;
   }
 
-  const provenance =
-    data.source.mode === 'ref' ? `baseline @ ${data.source.ref}` : 'snapshot baseline';
   const hasBaseline = data.baseline !== null;
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <StatusBadge status={data.status} />
         <span style={{ fontSize: 13 }}>
           {data.status === 'added'
-            ? 'No baseline yet — this is the current render.'
+            ? 'No baseline yet — press "Set baseline" to freeze this render.'
             : data.status === 'passed'
               ? 'Matches the baseline.'
               : `${data.mismatchedPixels.toLocaleString()} px differ (${(data.mismatchRatio * 100).toFixed(2)}%)`}
@@ -157,7 +142,6 @@ function Result({ data }: { data: DiffResponse }): React.ReactElement {
           <span style={{ fontSize: 11, color: '#b45309' }}>⚠ did not stabilize</span>
         )}
       </div>
-      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10 }}>{provenance}</div>
 
       {hasBaseline && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -190,170 +174,82 @@ function Result({ data }: { data: DiffResponse }): React.ReactElement {
   );
 }
 
-const SCAN_ORDER: Record<string, number> = { changed: 0, added: 1, skipped: 2, passed: 3 };
-
-function ScanList({
-  rows,
-  onSelect,
-}: {
-  rows: ScanRow[];
-  onSelect: (storyId: string) => void;
-}): React.ReactElement {
-  const count = (status: string): number => rows.filter((r) => r.status === status).length;
-  const notable = rows
-    .filter((r) => r.status === 'changed' || r.status === 'added')
-    .sort(
-      (a, b) =>
-        (SCAN_ORDER[a.status] ?? 9) - (SCAN_ORDER[b.status] ?? 9) ||
-        b.mismatchedPixels - a.mismatchedPixels,
-    );
-  return (
-    <div>
-      <div style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>
-        {count('changed')} changed · {count('added')} added · {count('passed')} passed
-        {count('skipped') ? ` · ${count('skipped')} skipped` : ''}
-      </div>
-      {notable.length === 0 ? (
-        <p style={{ color: '#1a8917', fontSize: 13 }}>
-          No differences across {rows.length} stories.
-        </p>
-      ) : (
-        <ul
-          style={{
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}
-        >
-          {notable.map((r) => (
-            <li key={r.storyId}>
-              <button
-                type="button"
-                onClick={() => onSelect(r.storyId)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 6,
-                  background: 'transparent',
-                  padding: '5px 8px',
-                  cursor: 'pointer',
-                  font: 'inherit',
-                }}
-              >
-                <StatusBadge status={r.status} />
-                <span style={{ flex: 1, textAlign: 'left', fontSize: 12 }}>
-                  {r.title} / {r.name}
-                </span>
-                {r.status === 'changed' && (
-                  <span style={{ fontSize: 11, color: '#6b7280' }}>
-                    {r.mismatchedPixels.toLocaleString()} px
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-type ScanState = {
-  busy: boolean;
-  progress?: { done: number; total: number };
-  rows?: ScanRow[];
-  scope?: ScanScope;
-  note?: string;
-  error?: string;
-};
-
 function Panel(): React.ReactElement {
   const state = useStorybookState();
-  const api = useStorybookApi();
   const storyId = state.storyId;
   const parameters = useParameter<VrtStoryParameters>('vrt', {});
-  const [mode, setMode] = useState<DiffMode>('ref');
-  const [ref, setRef] = useState('HEAD');
   const [busy, setBusy] = useState<null | 'compare' | 'snapshot'>(null);
   const [result, setResult] = useState<DiffResponse | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [scan, setScan] = useState<ScanState>({ busy: false });
-  const reqId = useRef(0);
+  const [hasBaseline, setHasBaseline] = useState(false);
+
+  // Refs, not closure captures: the channel handlers must always see the
+  // story that is on screen right now, and the request they belong to.
+  const storyIdRef = useRef(storyId);
+  storyIdRef.current = storyId;
+  const nextId = useRef(0);
+  const pendingCompare = useRef<Pending>(null);
+  const pendingSnapshot = useRef<Pending>(null);
 
   const emit = useChannel({
     [VRT_LIVE_RESPONSE]: (resp: DiffResponse) => {
-      if (resp.requestId !== String(reqId.current)) return;
-      setBusy(null);
-      setResult(resp);
-    },
-    [VRT_LIVE_SNAPSHOT_SET_DONE]: (resp: { requestId: string; ok: boolean }) => {
-      if (resp.requestId !== String(reqId.current)) return;
-      setBusy(null);
-      setNote(
-        resp.ok ? 'Snapshot baseline set — edit, then Compare.' : 'Could not snapshot this story.',
-      );
-    },
-    [VRT_LIVE_SCAN_PROGRESS]: (p: ScanProgress) => {
-      if (p.requestId !== String(reqId.current)) return;
-      setScan((s) => ({ ...s, progress: { done: p.done, total: p.total } }));
-    },
-    [VRT_LIVE_SCAN_RESPONSE]: (r: ScanResponse) => {
-      if (r.requestId !== String(reqId.current)) return;
-      setScan({
-        busy: false,
-        rows: r.rows,
-        ...(r.scope ? { scope: r.scope } : {}),
-        ...(r.note ? { note: r.note } : {}),
-        ...(r.error ? { error: r.error } : {}),
+      const verdict = classifyResponse({
+        pending: pendingCompare.current,
+        response: resp,
+        currentStoryId: storyIdRef.current,
       });
+      if (verdict === 'ignore') return;
+      pendingCompare.current = null;
+      setBusy(null);
+      if (verdict === 'apply') setResult(resp);
+    },
+    [VRT_LIVE_SNAPSHOT_SET_DONE]: (resp: SnapshotSetResponse) => {
+      const verdict = classifyResponse({
+        pending: pendingSnapshot.current,
+        response: resp,
+        currentStoryId: storyIdRef.current,
+      });
+      if (verdict === 'ignore') return;
+      pendingSnapshot.current = null;
+      setBusy(null);
+      if (verdict !== 'apply') return;
+      setHasBaseline(resp.ok);
+      setNote(
+        resp.ok
+          ? 'Baseline set — edit your component, then press Compare.'
+          : `Could not snapshot this story${resp.error ? `: ${resp.error}` : '.'}`,
+      );
     },
   });
 
+  // Switching stories abandons whatever was in flight: its answer is about a
+  // story we are no longer showing.
   useEffect(() => {
+    pendingCompare.current = null;
+    pendingSnapshot.current = null;
+    setBusy(null);
     setResult(null);
     setNote(null);
+    setHasBaseline(false);
   }, [storyId]);
 
-  const send = (event: string, extra: Record<string, unknown>): void => {
+  const start = (event: string, slot: React.RefObject<Pending>): void => {
     if (!storyId) return;
-    const id = String(++reqId.current);
-    setNote(null);
-    emit(event, {
-      requestId: id,
-      storyId,
-      sbUrl: window.location.origin,
-      parameters,
-      ...extra,
-    });
+    const requestId = String(++nextId.current);
+    slot.current = { requestId, storyId };
+    emit(event, { requestId, storyId, sbUrl: window.location.origin, parameters });
   };
 
-  const compare = (): void => {
-    setBusy('compare');
-    setResult(null);
-    send(VRT_LIVE_REQUEST, { mode, ...(mode === 'ref' ? { ref } : {}) });
-  };
   const setBaseline = (): void => {
     setBusy('snapshot');
-    send(VRT_LIVE_SNAPSHOT_SET, {});
-  };
-  const runScan = (scope: ScanScope): void => {
-    const id = String(++reqId.current);
-    setScan({ busy: true, progress: { done: 0, total: 0 }, scope });
-    setResult(null);
     setNote(null);
-    emit(VRT_LIVE_SCAN_REQUEST, {
-      requestId: id,
-      sbUrl: window.location.origin,
-      mode,
-      scope,
-      ...(mode === 'ref' ? { ref } : {}),
-    });
+    start(VRT_LIVE_SNAPSHOT_SET, pendingSnapshot);
+  };
+  const compare = (): void => {
+    setBusy('compare');
+    setNote(null);
+    setResult(null);
+    start(VRT_LIVE_REQUEST, pendingCompare);
   };
 
   if (!storyId) {
@@ -363,94 +259,14 @@ function Panel(): React.ReactElement {
   return (
     <div style={{ padding: 16, fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div
-          style={{
-            display: 'flex',
-            border: '1px solid #d1d5db',
-            borderRadius: 6,
-            overflow: 'hidden',
-          }}
-        >
-          {(['ref', 'snapshot'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              style={{
-                border: 'none',
-                padding: '5px 10px',
-                fontSize: 12,
-                cursor: 'pointer',
-                background: mode === m ? '#0a7ea4' : 'transparent',
-                color: mode === m ? '#fff' : '#374151',
-              }}
-            >
-              {m === 'ref' ? 'Git ref' : 'Snapshot'}
-            </button>
-          ))}
-        </div>
-
-        {mode === 'ref' ? (
-          <input
-            value={ref}
-            onChange={(e) => setRef(e.target.value)}
-            placeholder="HEAD, main, v1.0…"
-            style={{
-              padding: '5px 8px',
-              fontSize: 12,
-              border: '1px solid #d1d5db',
-              borderRadius: 6,
-              width: 140,
-            }}
-            aria-label="Git ref to compare against"
-          />
-        ) : (
-          <Button size="small" variant="outline" disabled={busy !== null} onClick={setBaseline}>
-            {busy === 'snapshot' ? 'Snapshotting…' : 'Set baseline'}
-          </Button>
-        )}
-
+        <Button size="small" variant="outline" disabled={busy !== null} onClick={setBaseline}>
+          {busy === 'snapshot' ? 'Capturing…' : hasBaseline ? 'Re-set baseline' : 'Set baseline'}
+        </Button>
         <Button size="small" variant="solid" disabled={busy !== null} onClick={compare}>
           {busy === 'compare' ? 'Capturing…' : 'Compare'}
         </Button>
-        <Button
-          size="small"
-          variant="outline"
-          disabled={scan.busy}
-          onClick={() => runScan('changed')}
-        >
-          {scan.busy && scan.scope === 'changed' ? 'Scanning…' : 'Scan changed'}
-        </Button>
-        <Button size="small" variant="outline" disabled={scan.busy} onClick={() => runScan('all')}>
-          {scan.busy && scan.scope === 'all' ? 'Scanning…' : 'Scan all'}
-        </Button>
         <span style={{ fontSize: 11, color: '#9ca3af' }}>{storyId}</span>
       </div>
-
-      {(scan.busy || scan.rows || scan.error || scan.note) && (
-        <div style={{ marginTop: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
-          {scan.busy ? (
-            <p style={{ color: '#6b7280', fontSize: 13 }}>
-              Scanning {scan.scope === 'changed' ? 'changed stories' : 'all stories'}{' '}
-              {mode === 'ref' ? `vs ${ref}` : 'vs snapshots'}…
-              {scan.progress && scan.progress.total > 0
-                ? ` ${scan.progress.done}/${scan.progress.total}`
-                : ''}
-            </p>
-          ) : scan.error ? (
-            <p style={{ color: '#d92d20', fontSize: 13 }}>Scan failed: {scan.error}</p>
-          ) : (
-            <>
-              {scan.note && (
-                <p style={{ color: '#b45309', fontSize: 13, margin: '0 0 8px' }}>{scan.note}</p>
-              )}
-              {scan.rows && scan.rows.length > 0 && (
-                <ScanList rows={scan.rows} onSelect={(id) => api.selectStory(id)} />
-              )}
-            </>
-          )}
-        </div>
-      )}
 
       {note && <p style={{ fontSize: 12, color: '#6b7280', marginTop: 12 }}>{note}</p>}
 
@@ -461,9 +277,9 @@ function Panel(): React.ReactElement {
           <Result data={result} />
         ) : (
           <p style={{ color: '#9ca3af', fontSize: 13 }}>
-            {mode === 'ref'
-              ? 'Compare the current render against the committed baseline at a git ref.'
-              : 'Set a baseline, edit your component, then Compare to see what moved.'}
+            Press <b>Set baseline</b> to freeze how this story looks now, edit your component, then
+            press <b>Compare</b> to see what moved. Baselines live in memory for this dev-server
+            session — nothing is written to the repo.
           </p>
         )}
       </div>

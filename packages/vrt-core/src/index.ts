@@ -2,6 +2,7 @@ export {
   changedFiles,
   type GitResult,
   isInsideWorkTree,
+  isSafeRef,
   listFilesAtRef,
   mergeBase,
   readFileAtRef,
