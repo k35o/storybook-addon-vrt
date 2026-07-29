@@ -25,6 +25,33 @@ function git(cwd: string, args: string[]): GitResult {
   }
 }
 
+/**
+ * Whether a revision is safe to hand to git as a positional argument.
+ *
+ * `execFile` never invokes a shell, so there is no shell injection here. The
+ * hazard is argument injection: a revision travels as its own argv entry, and
+ * git reads any entry starting with `-` as an option. `git diff --name-only
+ * --output=<path>` writes that file — verified — so a revision that reaches a
+ * git command unchecked is a file-writing flag waiting to happen.
+ *
+ * Today `refExists` runs first and git itself rejects those, so no caller can
+ * actually reach that sink. That is an accident of ordering, not an invariant:
+ * it disappears the moment someone adds a helper that takes a ref, or reorders
+ * the guard. Validating in one place makes it an invariant.
+ *
+ * Hyphens, dots and slashes are legitimate *inside* a ref (`feature/a-b`,
+ * `v1.0-rc1`) — only a leading one is the problem. Checked by code point so
+ * the intent (reject control characters and whitespace) is explicit.
+ */
+export function isSafeRef(ref: string): boolean {
+  if (ref.length === 0 || ref.startsWith('-')) return false;
+  for (const char of ref) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x20 || code === 0x7f) return false;
+  }
+  return true;
+}
+
 export function isInsideWorkTree(cwd: string): boolean {
   return git(cwd, ['rev-parse', '--is-inside-work-tree']).stdout.trim() === 'true';
 }
@@ -37,6 +64,7 @@ export function repoRoot(cwd: string): string | null {
 
 /** Whether the ref resolves to a commit that exists in this (possibly shallow) clone. */
 export function refExists(cwd: string, ref: string): boolean {
+  if (!isSafeRef(ref)) return false;
   return git(cwd, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]).ok;
 }
 
@@ -47,6 +75,7 @@ export function refExists(cwd: string, ref: string): boolean {
  * diff against nothing and pass green — the caller must fall back to a full run.
  */
 export function mergeBase(cwd: string, ref: string): string | null {
+  if (!isSafeRef(ref)) return null;
   const result = git(cwd, ['merge-base', ref, 'HEAD']);
   if (!result.ok) return null;
   const sha = result.stdout.trim();
@@ -74,7 +103,11 @@ export function changedFiles(repoRootDir: string, diffAgainst: string | null): s
       if (file !== '') files.add(file);
     }
   };
-  add(git(repoRootDir, ['diff', '--name-only', diffAgainst ?? 'HEAD']));
+  // `diffAgainst` is a merge-base SHA the caller already resolved, never raw
+  // user input — but this is the sink where an option-shaped value would turn
+  // into `git diff --output=<path>`, so it is validated here too.
+  const since = diffAgainst !== null && isSafeRef(diffAgainst) ? diffAgainst : 'HEAD';
+  add(git(repoRootDir, ['diff', '--name-only', since]));
   add(git(repoRootDir, ['diff', '--cached', '--name-only']));
   add(
     git(repoRootDir, ['ls-files', '--full-name', '--others', '--modified', '--exclude-standard']),
