@@ -13,7 +13,7 @@ catalog:
   '@vitest/browser-playwright': 4.1.10
   cac: 7.0.0
   pixelmatch: 7.2.0
-  playwright: 1.62.0
+  playwright: 1.62.1
   pngjs: 7.0.0
   react: 19.2.8
   react-dom: 19.2.8
