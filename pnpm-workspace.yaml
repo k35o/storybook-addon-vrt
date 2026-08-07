@@ -20,7 +20,7 @@ catalog:
   storybook: 10.5.5
   typescript: 7.0.2
   vite: 8.2.0
-  vite-plus: 0.2.6
+  vite-plus: 0.2.7
   vitest: 4.1.10
 
 blockExoticSubdeps: true
