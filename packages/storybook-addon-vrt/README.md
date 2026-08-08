@@ -16,6 +16,9 @@ Self-contained visual regression testing for Storybook stories running on
   PR affects, with a git guard that refuses to pass green on a broken diff.
 - 📊 **Reports** — console summary, `report.json`, and a self-contained
   `report.html` with side-by-side / slider / blink viewers.
+- 💬 **PR comments** — `svrt comment` (or the bundled GitHub Action) posts
+  the verdict to the pull request, with inline diff images when the report
+  is hosted somewhere public.
 - 🪶 **Minimal coupling** — no dependency on Storybook packages and no
   third-party VRT services, so major upgrades of Storybook or Vitest are
   unlikely to break it.
@@ -125,6 +128,23 @@ Copies each actual over its baseline. A story that ran but wasn't captured
 
 Opens the self-contained `.vrt/report.html` — a review UI with side-by-side,
 slider, and blink diff viewers, filterable by status.
+
+### `svrt comment [--pr <n>] [--repo <owner/name>] [--report-url <url>] [--max-entries <n>] [--dry-run]`
+
+Posts the result of the last run as a GitHub pull request comment — one
+marker-tagged comment per PR, updated in place on every push. Reads
+`.vrt/report.json`, so run `svrt run` or `svrt compare` first.
+
+- Auth: set the `GITHUB_TOKEN` env var (needs `pull-requests: write`). On
+  `pull_request` events the PR number and repository are auto-detected from
+  the Actions environment; elsewhere pass `--pr` (and `--repo`).
+- `--report-url <url>` — public URL where this run's `.vrt` directory is
+  hosted. With it the comment embeds expected/actual/diff images and links
+  `<url>/report.html`; without it the comment degrades to a text summary
+  pointing at the CI artifact.
+- A clean run never _creates_ a comment (no bot noise on green PRs) — it
+  only refreshes an existing comment back to ✅.
+- `--dry-run` prints the markdown without posting.
 
 ### `svrt plan [--changed [ref]] [--json]`
 
@@ -265,12 +285,74 @@ docker run --rm -v "$PWD":/work -w /work \
 
 ## CI
 
-Default to a **full run on every PR** — correctness first. One step captures,
-compares, and fails the job on visual findings. Pin the capture environment so
-baselines don't drift with fonts.
+Default to a **full run on every PR** — correctness first. Pin the capture
+environment so baselines don't drift with fonts. The bundled GitHub Action
+wraps the whole loop — `svrt run`, a PR comment with the verdict, and a
+report artifact on findings:
 
 ```yaml
 # .github/workflows/vrt.yml
+name: vrt
+on: pull_request
+jobs:
+  vrt:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.60.0-noble
+    permissions:
+      pull-requests: write # let the Action comment on the PR
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install --frozen-lockfile
+      - uses: k35o/storybook-addon-vrt@v0
+        with:
+          report-url: https://vrt.example.com/${{ github.event.number }} # optional
+```
+
+The Action's major tag tracks the npm package's major version (`v0` today,
+`v1` from 1.0) and always points at the latest release of that major.
+
+Action inputs (all optional): `report-url` (see
+[`svrt comment`](#svrt-comment---pr-n---repo-ownername---report-url-url---max-entries-n---dry-run)),
+`github-token`, `working-directory` (monorepo package), `run-args` (e.g.
+`--changed origin/main`), `artifact-name`. The comment step is best-effort —
+a failure to post never overrides the VRT verdict.
+
+The Action is a thin wrapper over the CLI; the explicit equivalent is:
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - run: pnpm install --frozen-lockfile
+  - run: pnpm exec svrt run
+  - if: always()
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    run: pnpm exec svrt comment
+  - if: failure()
+    uses: actions/upload-artifact@v4
+    with: { name: vrt-report, path: .vrt } # open report.html locally
+```
+
+`report.html` references images relatively, so the uploaded `.vrt` artifact
+opens as a working report after download.
+
+Package-manager variants of the run step: `npx svrt run` (npm),
+`pnpm exec svrt run` (pnpm), `yarn svrt run` (yarn), `bunx svrt run` (bun).
+
+### Fork pull requests
+
+On a PR from a fork, GitHub demotes `GITHUB_TOKEN` to read-only — the PR
+author's code runs in your CI, so a write token would be a takeover vector.
+Capture and compare still work; only the comment `403`s (the Action tolerates
+that). To get comments on fork PRs, split the workflow in two: the
+`pull_request` workflow only saves the report, and a `workflow_run` workflow —
+which runs on the base repository's definition and therefore may hold a write
+token — posts the comment from the saved artifact.
+
+```yaml
+# .github/workflows/vrt.yml — runs for forks too, needs no write access
+name: vrt
+on: pull_request
 jobs:
   vrt:
     runs-on: ubuntu-latest
@@ -279,16 +361,39 @@ jobs:
       - uses: actions/checkout@v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec svrt run
-      - if: failure()
+      - if: always() # the comment workflow needs the PR number
+        run: echo "${{ github.event.number }}" > .vrt/PR_NUMBER
+      - if: always()
         uses: actions/upload-artifact@v4
-        with: { name: vrt-report, path: .vrt } # open report.html locally
+        with: { name: vrt-report, path: .vrt }
 ```
 
-`report.html` references images relatively, so the uploaded `.vrt` artifact
-opens as a working report after download.
+```yaml
+# .github/workflows/vrt-comment.yml — posts with the base repo's write token
+name: vrt-comment
+on:
+  workflow_run:
+    workflows: [vrt]
+    types: [completed]
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vrt-report
+          path: .vrt
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npx --yes --package storybook-addon-vrt svrt comment --pr "$(cat .vrt/PR_NUMBER)"
+```
 
-Package-manager variants of the run step: `npx svrt run` (npm),
-`pnpm exec svrt run` (pnpm), `yarn svrt run` (yarn), `bunx svrt run` (bun).
+Never check out or execute the PR's code in the `workflow_run` workflow — it
+holds the write token. Reading the artifact is fine.
 
 ## Incremental runs
 

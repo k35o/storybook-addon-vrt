@@ -1,0 +1,73 @@
+name: 'storybook-addon-vrt'
+description: >-
+  Run visual regression tests for Storybook stories (svrt run), comment the
+  result on the pull request, and upload the report as an artifact on findings.
+author: 'k8o'
+branding:
+  icon: 'camera'
+  color: 'green'
+
+inputs:
+  report-url:
+    description: >-
+      Public URL where the VRT base dir (.vrt) is hosted for this run. When
+      set, the PR comment embeds expected/actual/diff images and links
+      <report-url>/report.html. Without it the comment degrades to a text
+      summary pointing at the uploaded artifact.
+    required: false
+    default: ''
+  github-token:
+    description: 'Token used to post the PR comment (needs pull-requests: write).'
+    required: false
+    default: ${{ github.token }}
+  working-directory:
+    description: 'Directory containing the Vitest project (monorepo package).'
+    required: false
+    default: '.'
+  run-args:
+    description: 'Extra arguments appended to `svrt run` (e.g. --changed origin/main).'
+    required: false
+    default: ''
+  artifact-name:
+    description: 'Name of the report artifact uploaded when the run has findings.'
+    required: false
+    default: 'vrt-report'
+
+runs:
+  using: 'composite'
+  steps:
+    # Capture + compare. The exit code is captured instead of failing here so
+    # the comment and artifact steps still run; the last step restores it.
+    - id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        RUN_ARGS: ${{ inputs.run-args }}
+      run: |
+        set +e
+        npx --no-install svrt run $RUN_ARGS
+        echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+
+    # Posting is best-effort: a fork PR's read-only token makes this step fail,
+    # which must not override the VRT verdict itself.
+    - if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+      continue-on-error: true
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        REPORT_URL: ${{ inputs.report-url }}
+      run: |
+        args=()
+        if [ -n "$REPORT_URL" ]; then args+=(--report-url "$REPORT_URL"); fi
+        npx --no-install svrt comment "${args[@]}"
+
+    - if: steps.run.outputs.exit-code != '0'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.working-directory }}/.vrt
+        if-no-files-found: ignore
+
+    - shell: bash
+      run: exit "${{ steps.run.outputs.exit-code }}"
