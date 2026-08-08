@@ -50,9 +50,24 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Release
+        id: release
         uses: k35o/pnpm-release-action@5e009384bf5b1d2501f8405817b5d5578a90624e # v0.2.2
         with:
           build: pnpm build
           github-token: ${{ steps.generate-token.outputs.token }}
           commit-message: 'chore: version packages'
           pr-title: 'chore: version packages'
+
+      # The composite Action is consumed as `k35o/storybook-addon-vrt@v<major>`;
+      # keep that tag on the latest published release of the package. The push
+      # uses the App token persisted by checkout.
+      - name: Move the Action major tag
+        if: steps.release.outputs.published == 'true'
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.release.outputs['published-packages'] }}
+        run: |
+          version=$(jq -r '.[] | select(.name == "storybook-addon-vrt") | .version' <<< "$PUBLISHED_PACKAGES")
+          [ -n "$version" ] || exit 0
+          tag="v${version%%.*}"
+          git tag -f "$tag"
+          git push --force origin "$tag"

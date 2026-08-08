@@ -10,6 +10,7 @@ Vitest browser mode. See the
 | ------------------------------- | -------------------------------------------- |
 | `packages/storybook-addon-vrt` | The published library (plugin, runtime, CLI) |
 | `examples/basic`                | React + Storybook playground and E2E harness |
+| `action.yml`                    | Composite GitHub Action wrapping `svrt run` + `svrt comment` |
 
 ## Commands
 
