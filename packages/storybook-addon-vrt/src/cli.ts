@@ -356,6 +356,10 @@ cli
   .option('--repo <owner/name>', 'GitHub repository (default: env GITHUB_REPOSITORY)')
   .option('--report-url <url>', 'Public URL serving the VRT base dir; embeds diff images')
   .option('--max-entries <n>', 'Max findings detailed in the comment (default: 10)')
+  .option(
+    '--id <name>',
+    'Namespace for the sticky comment, when multiple VRT projects comment on one PR',
+  )
   .option('--dry-run', 'Print the comment markdown without posting')
   .action(
     async (
@@ -364,6 +368,7 @@ cli
         repo?: string;
         reportUrl?: string;
         maxEntries?: number | string;
+        id?: string;
         dryRun?: boolean;
       },
     ) => {
@@ -373,6 +378,7 @@ cli
         const markdown = buildCommentMarkdown(report, {
           ...(flags.reportUrl !== undefined ? { reportUrl: flags.reportUrl } : {}),
           ...(flags.maxEntries !== undefined ? { maxEntries: toNumber(flags.maxEntries) } : {}),
+          ...(flags.id !== undefined ? { id: flags.id } : {}),
         });
         if (flags.dryRun) {
           console.info(markdown);
@@ -386,6 +392,7 @@ cli
         // never had findings stays free of bot noise.
         const result = await upsertPrComment(target, markdown, {
           onlyUpdate: findingsOf(report).length === 0,
+          ...(flags.id !== undefined ? { id: flags.id } : {}),
         });
         if (result.action === 'skipped') {
           console.info('No findings and no existing VRT comment — nothing to post.');

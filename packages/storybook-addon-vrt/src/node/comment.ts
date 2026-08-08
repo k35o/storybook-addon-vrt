@@ -4,8 +4,22 @@ import type { VrtReport, VrtReportItem } from '../types';
 import { VrtConfigError } from './config';
 import { detailOf, FAILING_STATUSES, storyOf } from './github';
 
-/** Hidden marker that lets `svrt comment` find and update its own comment. */
-export const COMMENT_MARKER = '<!-- storybook-addon-vrt -->';
+/**
+ * Hidden marker that lets `svrt comment` find and update its own comment.
+ * An `id` namespaces the marker (and the comment) so multiple VRT projects —
+ * e.g. several Storybooks in a monorepo — can each keep their own sticky
+ * comment on the same PR without overwriting each other.
+ */
+export function commentMarker(id?: string): string {
+  return id === undefined ? '<!-- storybook-addon-vrt -->' : `<!-- storybook-addon-vrt:${id} -->`;
+}
+
+/** Keeps the id safe inside an HTML comment and stable as an identifier. */
+export function validateCommentId(id: string): void {
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+    throw new VrtConfigError(`Invalid --id "${id}": use only letters, digits, ".", "_" and "-".`);
+  }
+}
 
 export function findingsOf(report: VrtReport): VrtReportItem[] {
   return report.items.filter((item) => FAILING_STATUSES.has(item.status));
@@ -21,6 +35,8 @@ export type BuildCommentOptions = {
   reportUrl?: string;
   /** Max findings rendered in detail before collapsing to a count. */
   maxEntries?: number;
+  /** Namespaces the marker and labels the heading — see {@link commentMarker}. */
+  id?: string;
 };
 
 function imageUrl(base: string, relPath: string): string {
@@ -34,13 +50,15 @@ function imageCell(base: string, relPath: string | null, alt: string): string {
 export function buildCommentMarkdown(report: VrtReport, options: BuildCommentOptions = {}): string {
   const maxEntries = options.maxEntries ?? 10;
   const reportUrl = options.reportUrl?.replace(/\/+$/, '');
+  if (options.id !== undefined) validateCommentId(options.id);
+  const label = options.id === undefined ? 'VRT' : `VRT (${options.id})`;
   const s = report.summary;
   const findings = findingsOf(report);
 
   const heading =
     findings.length === 0
-      ? '## ✅ VRT passed'
-      : `## 📸 VRT: ${[
+      ? `## ✅ ${label} passed`
+      : `## 📸 ${label}: ${[
           s.changed > 0 ? `${s.changed} changed` : null,
           s.added > 0 ? `${s.added} added` : null,
           s.removed > 0 ? `${s.removed} removed` : null,
@@ -57,7 +75,7 @@ export function buildCommentMarkdown(report: VrtReport, options: BuildCommentOpt
     : '';
 
   const lines = [
-    COMMENT_MARKER,
+    commentMarker(options.id),
     heading,
     '',
     `Mode: ${mode}${escalated}`,
@@ -207,6 +225,7 @@ async function githubRequest(
 
 async function findMarkerComment(
   target: CommentTarget,
+  marker: string,
   fetchImpl: typeof fetch,
 ): Promise<number | null> {
   for (let page = 1; page <= 10; page++) {
@@ -216,7 +235,7 @@ async function findMarkerComment(
       'GET',
       `/repos/${target.repo}/issues/${target.pr}/comments?per_page=100&page=${page}`,
     )) as Array<{ id: number; body?: string }>;
-    const hit = comments.find((comment) => comment.body?.includes(COMMENT_MARKER));
+    const hit = comments.find((comment) => comment.body?.includes(marker));
     if (hit !== undefined) return hit.id;
     if (comments.length < 100) return null;
   }
@@ -232,15 +251,16 @@ export type UpsertResult = {
  * Creates or updates the single marker-tagged VRT comment on a PR.
  * `onlyUpdate` refreshes a stale comment (e.g. back to green) without ever
  * creating one — so an all-passed run on a PR that never had findings stays
- * silent.
+ * silent. `id` scopes the lookup to that id's marker.
  */
 export async function upsertPrComment(
   target: CommentTarget,
   body: string,
-  options: { onlyUpdate?: boolean } = {},
+  options: { onlyUpdate?: boolean; id?: string } = {},
   fetchImpl: typeof fetch = fetch,
 ): Promise<UpsertResult> {
-  const existingId = await findMarkerComment(target, fetchImpl);
+  if (options.id !== undefined) validateCommentId(options.id);
+  const existingId = await findMarkerComment(target, commentMarker(options.id), fetchImpl);
   if (existingId === null && options.onlyUpdate) {
     return { action: 'skipped', url: null };
   }

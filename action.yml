@@ -24,6 +24,13 @@ inputs:
     description: 'Directory containing the Vitest project (monorepo package).'
     required: false
     default: '.'
+  comment-id:
+    description: >-
+      Namespace for the sticky comment (svrt comment --id). Required when
+      multiple VRT projects comment on the same pull request, so each keeps
+      its own comment instead of overwriting the others.
+    required: false
+    default: ''
   run-args:
     description: 'Extra arguments appended to `svrt run` (e.g. --changed origin/main).'
     required: false
@@ -57,9 +64,11 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         REPORT_URL: ${{ inputs.report-url }}
+        COMMENT_ID: ${{ inputs.comment-id }}
       run: |
         args=()
         if [ -n "$REPORT_URL" ]; then args+=(--report-url "$REPORT_URL"); fi
+        if [ -n "$COMMENT_ID" ]; then args+=(--id "$COMMENT_ID"); fi
         npx --no-install svrt comment "${args[@]}"
 
     - if: steps.run.outputs.exit-code != '0'
