@@ -5,16 +5,16 @@ export function isGithubActions(): boolean {
   return process.env['GITHUB_ACTIONS'] === 'true';
 }
 
-function storyOf(key: string): { file: string; name: string } {
+export function storyOf(key: string): { file: string; name: string } {
   const slash = key.lastIndexOf('/');
   const file = slash === -1 ? key : key.slice(0, slash);
   const name = (slash === -1 ? key : key.slice(slash + 1)).replace(/\.png$/, '');
   return { file, name };
 }
 
-const FAILING = new Set(['changed', 'added', 'removed']);
+export const FAILING_STATUSES = new Set(['changed', 'added', 'removed']);
 
-function detailOf(item: VrtReportItem): string {
+export function detailOf(item: VrtReportItem): string {
   if (item.mismatchedPixels === undefined) return '';
   const ratio = ((item.mismatchRatio ?? 0) * 100).toFixed(2);
   const dims = item.dimensions ? ', dimensions differ' : '';
@@ -49,7 +49,7 @@ export function writeGithubStepSummary(report: VrtReport): void {
     '',
   ];
 
-  const failing = report.items.filter((i) => FAILING.has(i.status));
+  const failing = report.items.filter((i) => FAILING_STATUSES.has(i.status));
   if (failing.length > 0) {
     lines.push('| status | story | detail |', '| --- | --- | --- |');
     for (const item of failing.slice(0, 50)) {
@@ -76,7 +76,7 @@ function escapeAnnotation(value: string): string {
  * repo-root-relative so it attaches inline in a monorepo package.
  */
 export function writeGithubAnnotations(report: VrtReport, filePrefix = ''): void {
-  const failing = report.items.filter((i) => FAILING.has(i.status));
+  const failing = report.items.filter((i) => FAILING_STATUSES.has(i.status));
   const cap = 10;
   for (const item of failing.slice(0, cap)) {
     const { file, name } = storyOf(item.key);

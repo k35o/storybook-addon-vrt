@@ -6,6 +6,13 @@ import { styleText } from 'node:util';
 import { cac } from 'cac';
 import { approve } from './approve';
 import { runCompare, type RunCompareOptions } from './compare/engine';
+import {
+  buildCommentMarkdown,
+  findingsOf,
+  readReportJson,
+  resolveCommentTarget,
+  upsertPrComment,
+} from './node/comment';
 import { resolveVrtConfig, VrtConfigError, type ResolveVrtConfigInput } from './node/config';
 import { repoRoot } from './node/git';
 import { isGithubActions, writeGithubAnnotations, writeGithubStepSummary } from './node/github';
@@ -342,6 +349,56 @@ cli.command('report', 'Open the latest HTML report in the browser').action((flag
     fail(error);
   }
 });
+
+cli
+  .command('comment', 'Post or update the VRT result as a pull request comment (GitHub)')
+  .option('--pr <number>', 'Pull request number (auto-detected on pull_request events)')
+  .option('--repo <owner/name>', 'GitHub repository (default: env GITHUB_REPOSITORY)')
+  .option('--report-url <url>', 'Public URL serving the VRT base dir; embeds diff images')
+  .option('--max-entries <n>', 'Max findings detailed in the comment (default: 10)')
+  .option('--dry-run', 'Print the comment markdown without posting')
+  .action(
+    async (
+      flags: SharedFlags & {
+        pr?: number | string;
+        repo?: string;
+        reportUrl?: string;
+        maxEntries?: number | string;
+        dryRun?: boolean;
+      },
+    ) => {
+      try {
+        const config = resolveFromFlags(flags);
+        const report = readReportJson(config.baseDir);
+        const markdown = buildCommentMarkdown(report, {
+          ...(flags.reportUrl !== undefined ? { reportUrl: flags.reportUrl } : {}),
+          ...(flags.maxEntries !== undefined ? { maxEntries: toNumber(flags.maxEntries) } : {}),
+        });
+        if (flags.dryRun) {
+          console.info(markdown);
+          return;
+        }
+        const target = resolveCommentTarget({
+          ...(flags.pr !== undefined ? { pr: toNumber(flags.pr) } : {}),
+          ...(flags.repo !== undefined ? { repo: flags.repo } : {}),
+        });
+        // A clean run only refreshes an existing (stale) comment — a PR that
+        // never had findings stays free of bot noise.
+        const result = await upsertPrComment(target, markdown, {
+          onlyUpdate: findingsOf(report).length === 0,
+        });
+        if (result.action === 'skipped') {
+          console.info('No findings and no existing VRT comment — nothing to post.');
+        } else {
+          console.info(
+            `${result.action === 'created' ? 'Posted' : 'Updated'} VRT comment on PR #${target.pr}${result.url ? `: ${result.url}` : ''}`,
+          );
+        }
+      } catch (error) {
+        fail(error);
+      }
+    },
+  );
 
 cli.help();
 cli.version(version);
