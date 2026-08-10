@@ -1,13 +1,16 @@
 import { page, server } from 'vitest/browser';
 import type { VrtRuntimeOptions, VrtStoryParameters, VrtUncapturedReason } from '../types';
 import { deriveKey } from './key';
+import { takeStableScreenshot } from './stable';
 import { clearGlobalStoryContext, getStoryContext } from './story-context';
 
 // The browser context can write to disk through Vitest's built-in fs command
 // (paths resolve against the project root, so absolute paths land verbatim).
 type BrowserServerLike = {
   browser: string;
-  commands?: { writeFile?: (path: string, content: string) => Promise<void> };
+  commands?: {
+    writeFile?: (path: string, content: string, encoding?: string) => Promise<void>;
+  };
 };
 
 /**
@@ -111,15 +114,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function fnv1a(input: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index++) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16);
-}
-
 function resolveCaptureTarget(parameters: VrtStoryParameters): Element | undefined {
   const target = parameters.capture ?? 'viewport';
   if (target === 'viewport') return undefined;
@@ -142,37 +136,25 @@ async function takeBase64(element: Element | undefined): Promise<string> {
   return page.screenshot({ save: false });
 }
 
-async function saveScreenshot(element: Element | undefined, path: string): Promise<void> {
+async function saveScreenshot(
+  element: Element | undefined,
+  path: string,
+  base64: string,
+): Promise<void> {
+  const writeFile = (server as unknown as BrowserServerLike).commands?.writeFile;
+  if (typeof writeFile === 'function') {
+    await writeFile(path, base64, 'base64');
+    return;
+  }
+  // Without the fs command we cannot persist the verified bytes; fall back to
+  // a fresh (unverified) screenshot rather than losing the capture entirely.
   // `page.screenshot` resolves absolute paths as-is, so the PNG lands in
-  // actualDir. Isolated here so a future Vitest change only needs one swap
-  // (e.g. to a custom browser command).
+  // actualDir.
   if (element) {
     await page.elementLocator(element).screenshot({ path });
   } else {
     await page.screenshot({ path });
   }
-}
-
-/**
- * Waits until two consecutive screenshots hash identically, so animations
- * or late-loading content do not produce flaky captures. Never fails the
- * user's test on instability — it warns and captures anyway.
- */
-async function waitForStableScreenshot(
-  element: Element | undefined,
-  options: VrtRuntimeOptions,
-  key: string,
-): Promise<void> {
-  let previous: string | undefined;
-  for (let attempt = 0; attempt < Math.max(options.stability.retries, 2); attempt++) {
-    const hash = fnv1a(await takeBase64(element));
-    if (previous === hash) return;
-    previous = hash;
-    await sleep(options.stability.interval);
-  }
-  console.warn(
-    `[vrt] Screenshot did not stabilize after ${options.stability.retries} attempts: ${key}`,
-  );
 }
 
 export async function captureStory(
@@ -227,8 +209,16 @@ export async function captureStory(
         await sleep(parameters.delay);
       }
       const element = resolveCaptureTarget(parameters);
-      await waitForStableScreenshot(element, options, key);
-      await saveScreenshot(element, `${options.actualDir}/${key}`);
+      const base64 = await takeStableScreenshot(
+        () => takeBase64(element),
+        options.stability,
+        () => {
+          console.warn(
+            `[vrt] Screenshot did not stabilize after ${options.stability.retries} attempts: ${key}`,
+          );
+        },
+      );
+      await saveScreenshot(element, `${options.actualDir}/${key}`, base64);
     } finally {
       restoreMask();
       restoreRemove();

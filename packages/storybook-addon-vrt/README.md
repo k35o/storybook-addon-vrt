@@ -203,6 +203,20 @@ machine-readable `reason` in `report.json`.
 A failing story test is never captured, and a screenshot that does not
 stabilize logs a warning instead of failing your test run.
 
+The injected CSS cannot stop JS-driven animation loops (Framer Motion / the
+`motion` package, GSAP, rAF-based tweens): those keep mutating inline styles,
+and under CI CPU contention a stalled frame can look "stable" to the retake
+loop yet sit mid-animation. If your components animate with such libraries,
+also emulate reduced motion in the browser context and have the app honor it
+(e.g. Motion's `<MotionConfig reducedMotion="user">`):
+
+```ts
+// vitest.config.ts
+provider: playwright({
+  contextOptions: { reducedMotion: 'reduce' },
+}),
+```
+
 ## Story parameters
 
 Per-story overrides via `parameters.vrt`:
