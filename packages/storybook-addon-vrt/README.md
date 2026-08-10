@@ -129,7 +129,7 @@ Copies each actual over its baseline. A story that ran but wasn't captured
 Opens the self-contained `.vrt/report.html` — a review UI with side-by-side,
 slider, and blink diff viewers, filterable by status.
 
-### `svrt comment [--pr <n>] [--repo <owner/name>] [--report-url <url>] [--max-entries <n>] [--dry-run]`
+### `svrt comment [--pr <n>] [--repo <owner/name>] [--report-url <url>] [--id <name>] [--max-entries <n>] [--dry-run]`
 
 Posts the result of the last run as a GitHub pull request comment — one
 marker-tagged comment per PR, updated in place on every push. Reads
@@ -144,6 +144,10 @@ marker-tagged comment per PR, updated in place on every push. Reads
   pointing at the CI artifact.
 - A clean run never _creates_ a comment (no bot noise on green PRs) — it
   only refreshes an existing comment back to ✅.
+- `--id <name>` — namespaces the comment (marker and heading). Required when
+  multiple VRT projects comment on the same PR — e.g. a monorepo with several
+  Storybooks — so each keeps its own sticky comment instead of overwriting
+  the others: `svrt comment --id admin`.
 - `--dry-run` prints the markdown without posting.
 
 ### `svrt plan [--changed [ref]] [--json]`
@@ -311,8 +315,8 @@ jobs:
 The Action's major tag tracks the npm package's major version (`v0` today,
 `v1` from 1.0) and always points at the latest release of that major.
 
-Action inputs (all optional): `report-url` (see
-[`svrt comment`](#svrt-comment---pr-n---repo-ownername---report-url-url---max-entries-n---dry-run)),
+Action inputs (all optional): `report-url` and `comment-id` (see
+[`svrt comment`](#svrt-comment---pr-n---repo-ownername---report-url-url---id-name---max-entries-n---dry-run)),
 `github-token`, `working-directory` (monorepo package), `run-args` (e.g.
 `--changed origin/main`), `artifact-name`. The comment step is best-effort —
 a failure to post never overrides the VRT verdict.

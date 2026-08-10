@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { VrtReport } from '../types';
 import {
   buildCommentMarkdown,
-  COMMENT_MARKER,
+  commentMarker,
   resolveCommentTarget,
   upsertPrComment,
   type CommentTarget,
@@ -63,7 +63,7 @@ describe('buildCommentMarkdown', () => {
   it('embeds encoded image URLs and a report link when reportUrl is set', () => {
     const md = buildCommentMarkdown(makeReport(), { reportUrl: 'https://vrt.example.com/pr-12/' });
 
-    expect(md).toContain(COMMENT_MARKER);
+    expect(md).toContain(commentMarker());
     expect(md).toContain('## 📸 VRT: 1 changed · 1 added');
     expect(md).toContain('Mode: incremental vs `origin/main`');
     expect(md).toContain('| 1 | 1 | 1 | 0 | 0 | 1 |');
@@ -97,6 +97,17 @@ describe('buildCommentMarkdown', () => {
     expect(md).toContain('src/button.stories.tsx');
     expect(md).not.toContain('src/badge.stories.tsx');
     expect(md).toContain('…and 1 more.');
+  });
+
+  it('namespaces the marker and labels the heading with an id', () => {
+    const md = buildCommentMarkdown(makeReport(), { id: 'app-main' });
+
+    expect(md).toContain('<!-- storybook-addon-vrt:app-main -->');
+    expect(md).toContain('## 📸 VRT (app-main): 1 changed · 1 added');
+  });
+
+  it('rejects an id that would break the HTML comment marker', () => {
+    expect(() => buildCommentMarkdown(makeReport(), { id: 'a -->b' })).toThrow(/Invalid --id/);
   });
 
   it('reports a clean pass without findings sections', () => {
@@ -204,7 +215,7 @@ describe('upsertPrComment', () => {
       { json: { html_url: 'https://github.com/k35o/storybook-addon-vrt/pull/12#issuecomment-9' } },
     ]);
 
-    const result = await upsertPrComment(target, `${COMMENT_MARKER}\nhello`, {}, impl);
+    const result = await upsertPrComment(target, `${commentMarker()}\nhello`, {}, impl);
 
     expect(result).toEqual({
       action: 'created',
@@ -213,13 +224,13 @@ describe('upsertPrComment', () => {
     expect(calls[1]).toEqual({
       url: 'https://api.github.com/repos/k35o/storybook-addon-vrt/issues/12/comments',
       method: 'POST',
-      body: { body: `${COMMENT_MARKER}\nhello` },
+      body: { body: `${commentMarker()}\nhello` },
     });
   });
 
   it('updates the existing marker comment in place', async () => {
     const { impl, calls } = fakeFetch([
-      { json: [{ id: 5, body: `${COMMENT_MARKER}\nold` }] },
+      { json: [{ id: 5, body: `${commentMarker()}\nold` }] },
       { json: { html_url: 'https://github.com/k35o/storybook-addon-vrt/pull/12#issuecomment-5' } },
     ]);
 
@@ -240,6 +251,40 @@ describe('upsertPrComment', () => {
 
     expect(result).toEqual({ action: 'skipped', url: null });
     expect(calls).toHaveLength(1);
+  });
+
+  it('scopes the lookup to the id marker so projects never overwrite each other', async () => {
+    // Both a plain-marker comment and another project's id comment exist;
+    // only the matching id's comment is updated.
+    const { impl, calls } = fakeFetch([
+      {
+        json: [
+          { id: 3, body: `${commentMarker()}\nplain` },
+          { id: 7, body: `${commentMarker('admin')}\nadmin` },
+          { id: 9, body: `${commentMarker('app-main')}\nmain` },
+        ],
+      },
+      { json: { html_url: 'https://github.com/k35o/storybook-addon-vrt/pull/12#issuecomment-9' } },
+    ]);
+
+    const result = await upsertPrComment(target, 'new body', { id: 'app-main' }, impl);
+
+    expect(result.action).toBe('updated');
+    expect(calls[1]?.url).toBe(
+      'https://api.github.com/repos/k35o/storybook-addon-vrt/issues/comments/9',
+    );
+  });
+
+  it('does not treat an id comment as the plain-marker comment', async () => {
+    const { impl, calls } = fakeFetch([
+      { json: [{ id: 7, body: `${commentMarker('admin')}\nadmin` }] },
+      { json: { html_url: 'https://github.com/k35o/storybook-addon-vrt/pull/12#issuecomment-8' } },
+    ]);
+
+    const result = await upsertPrComment(target, 'body', {}, impl);
+
+    expect(result.action).toBe('created');
+    expect(calls[1]?.method).toBe('POST');
   });
 
   it('explains the fork-PR token restriction on 403', async () => {
