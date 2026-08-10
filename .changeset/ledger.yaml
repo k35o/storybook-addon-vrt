@@ -6,3 +6,7 @@ storybook-addon-vrt@0.3.0:
   dir: packages/storybook-addon-vrt
   intents:
     - svrt-comment-pr-comments
+storybook-addon-vrt@0.4.0:
+  dir: packages/storybook-addon-vrt
+  intents:
+    - comment-id-namespace
