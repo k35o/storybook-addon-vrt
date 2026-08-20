@@ -3,8 +3,8 @@ packages:
   - examples/*
 
 catalog:
-  '@storybook/addon-vitest': 10.5.7
-  '@storybook/react-vite': 10.5.7
+  '@storybook/addon-vitest': 10.5.8
+  '@storybook/react-vite': 10.5.8
   '@types/node': 24.13.3
   '@types/pngjs': 6.0.5
   '@types/react': 19.2.18
@@ -17,7 +17,7 @@ catalog:
   pngjs: 7.0.0
   react: 19.2.8
   react-dom: 19.2.8
-  storybook: 10.5.7
+  storybook: 10.5.8
   typescript: 7.0.2
   vite: 8.2.1
   vite-plus: 0.2.9
