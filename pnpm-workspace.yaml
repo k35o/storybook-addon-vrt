@@ -19,7 +19,7 @@ catalog:
   react-dom: 19.3.0
   storybook: 10.6.2
   typescript: 7.0.2
-  vite: 8.3.2
+  vite: 8.3.3
   vite-plus: 0.3.3
   vitest: 4.1.11
 
@@ -35,3 +35,6 @@ allowBuilds:
 minimumReleaseAge: 4320
 
 verifyDepsBeforeRun: install
+minimumReleaseAgeExclude:
+  # Renovate security update: vite@8.3.3
+  - vite@8.3.3
