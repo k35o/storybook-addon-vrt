@@ -20,7 +20,7 @@
       "groupName": "playwright dependencies"
     },
     {
-      "matchPackageNames": ["vite-plus"],
+      "matchPackageNames": ["vite-plus", "@voidzero-dev/vite-plus-core"],
       "groupName": "vite-plus dependencies"
     },
     {
