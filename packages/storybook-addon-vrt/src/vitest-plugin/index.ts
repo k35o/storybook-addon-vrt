@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin, UserConfig } from 'vite';
 import { resolveVrtConfig } from '../node/config';
 import type { VrtOptions, VrtRuntimeOptions } from '../types';
+import { viewportCommands } from './viewport-commands';
 
 function toPosix(p: string): string {
   return p.split(path.sep).join('/');
@@ -85,6 +86,9 @@ export function vrt(options: VrtOptions = {}): Plugin {
           ],
           env: {
             __VRT_OPTIONS__: JSON.stringify(runtime),
+          },
+          browser: {
+            commands: viewportCommands,
           },
         },
       } as UserConfig;

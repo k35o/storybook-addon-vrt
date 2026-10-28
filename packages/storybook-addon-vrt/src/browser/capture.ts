@@ -1,5 +1,6 @@
 import { page, server } from 'vitest/browser';
 import type { VrtRuntimeOptions, VrtStoryParameters, VrtUncapturedReason } from '../types';
+import { FIT_VIEWPORT_COMMAND, RESTORE_VIEWPORT_COMMAND, type ViewportSize } from '../viewport';
 import { deriveKey } from './key';
 import { takeStableScreenshot } from './stable';
 import { clearGlobalStoryContext, getStoryContext } from './story-context';
@@ -11,6 +12,12 @@ type BrowserServerLike = {
   commands?: {
     writeFile?: (path: string, content: string, encoding?: string) => Promise<void>;
   };
+};
+
+// Registered by our plugin next to this setup file.
+type ViewportCommandsLike = {
+  [FIT_VIEWPORT_COMMAND]: (selector: string) => Promise<ViewportSize | null>;
+  [RESTORE_VIEWPORT_COMMAND]: (size: ViewportSize) => Promise<void>;
 };
 
 /**
@@ -202,15 +209,24 @@ export async function captureStory(
     await document.fonts.ready;
     if (options.stability.disableAnimations) disableAnimations();
 
+    const commands = server.commands as unknown as ViewportCommandsLike;
     const restoreRemove = applyRemove(toSelectorList(parameters.remove));
     const restoreMask = applyMask(toSelectorList(parameters.mask));
+    let originalViewport: ViewportSize | null = null;
     try {
       if (parameters.delay !== undefined && parameters.delay > 0) {
         await sleep(parameters.delay);
       }
       const element = resolveCaptureTarget(parameters);
+      // `page.screenshot()` captures the iframe's body.
+      const selector = element ? page.elementLocator(element).selector : 'body';
       const base64 = await takeStableScreenshot(
-        () => takeBase64(element),
+        async () => {
+          // Re-fit before every shot: the story may still be growing.
+          const previous = await commands[FIT_VIEWPORT_COMMAND](selector);
+          originalViewport ??= previous;
+          return takeBase64(element);
+        },
         options.stability,
         () => {
           console.warn(
@@ -220,6 +236,7 @@ export async function captureStory(
       );
       await saveScreenshot(element, `${options.actualDir}/${key}`, base64);
     } finally {
+      if (originalViewport) await commands[RESTORE_VIEWPORT_COMMAND](originalViewport);
       restoreMask();
       restoreRemove();
     }
