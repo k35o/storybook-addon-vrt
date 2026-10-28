@@ -53,7 +53,18 @@ const KEYS = {
   skipped: 'src/button.stories.tsx/Skipped-In-Vrt.png',
   cardDefault: 'src/card.stories.tsx/Default.png',
   cardMasked: 'src/card.stories.tsx/Masked-Timestamp.png',
+  install: 'src/code-block.stories.tsx/Install.png',
+  longListing: 'src/code-block.stories.tsx/Long-Listing.png',
+  installAfterLongListing: 'src/code-block.stories.tsx/Install-After-Long-Listing.png',
 };
+
+function readActual(key) {
+  return readFileSync(path.join(actualDir, key));
+}
+
+function pngHeight(png) {
+  return png.readUInt32BE(20); // IHDR height
+}
 
 // 1. Capture every story.
 rmSync(vrtDir, { recursive: true, force: true });
@@ -61,12 +72,31 @@ assert(
   run('pnpm', ['exec', 'vitest', 'run', '--project=storybook'], { VRT: '1' }) === 0,
   'vitest capture run must succeed',
 );
-for (const key of [KEYS.primary, KEYS.clicked, KEYS.cardDefault, KEYS.cardMasked]) {
+for (const key of [
+  KEYS.primary,
+  KEYS.clicked,
+  KEYS.cardDefault,
+  KEYS.cardMasked,
+  KEYS.install,
+  KEYS.longListing,
+  KEYS.installAfterLongListing,
+]) {
   assert(existsSync(path.join(actualDir, key)), `missing actual screenshot: ${key}`);
 }
 assert(
   !existsSync(path.join(actualDir, KEYS.skipped)),
   'story with parameters.vrt.skip must not be captured',
+);
+
+// Capturing a story taller than the viewport must not change how the next
+// story on the same page renders a generic font family (`monospace`).
+assert(
+  pngHeight(readActual(KEYS.longListing)) > pngHeight(readActual(KEYS.install)),
+  `${KEYS.longListing} must be captured beyond the viewport`,
+);
+assert(
+  readActual(KEYS.installAfterLongListing).equals(readActual(KEYS.install)),
+  `${KEYS.installAfterLongListing} must render exactly like ${KEYS.install}`,
 );
 
 // 2. Promote everything to baseline → compare must pass.

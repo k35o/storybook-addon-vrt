@@ -54,6 +54,7 @@ export default defineConfig({
             enabled: true,
             headless: true,
             provider: playwright(),
+            screenshotFailures: false,
             instances: [{ browser: 'chromium', context: { reducedMotion: 'reduce' } }],
           },
         },
@@ -62,6 +63,13 @@ export default defineConfig({
   },
 });
 ```
+
+`screenshotFailures: false` matters in Chromium: when a story taller than the
+viewport fails an attempt, even one that a retry passes in the end, Vitest's
+own failure screenshot captures it beyond the viewport, which changes how every
+later story on the same page renders generic font families (see
+[How it works](#how-it-works)). Screenshots you take of such a target in a play
+function (`page.screenshot()`, `toMatchScreenshot`) do the same.
 
 Commit the baselines, ignore everything else — add to `.gitignore`:
 
@@ -202,6 +210,16 @@ machine-readable `reason` in `report.json`.
 
 A failing story test is never captured, and a screenshot that does not
 stabilize logs a warning instead of failing your test run.
+
+In Chromium, the hook grows the Playwright page around Vitest's tester iframe
+before each screenshot until the capture target fits, keeping the page's
+orientation, and restores the size afterwards. Chromium would otherwise
+capture a target larger than the viewport with `captureBeyondViewport`, which
+resets the generic font families Playwright configures (`monospace`, `serif`,
+…) for every story that later runs on the same page. The iframe keeps its
+size, so the story's viewport (`innerWidth`/`innerHeight`, `width`/`height`
+media queries) does not change; only `screen.width`/`screen.height` and
+`device-*` media queries report the grown page while the screenshot is taken.
 
 The injected CSS cannot stop JS-driven animation loops (Framer Motion / the
 `motion` package, GSAP, rAF-based tweens): those keep mutating inline styles,

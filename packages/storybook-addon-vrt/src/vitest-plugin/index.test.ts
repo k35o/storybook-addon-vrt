@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Plugin, UserConfig } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { VrtRuntimeOptions } from '../types';
+import { FIT_VIEWPORT_COMMAND, RESTORE_VIEWPORT_COMMAND } from '../viewport';
 import { vrt } from './index';
 
 type InjectedConfig = {
@@ -11,6 +12,7 @@ type InjectedConfig = {
     setupFiles?: string[];
     globalSetup?: string[];
     env?: Record<string, string>;
+    browser?: { commands?: Record<string, unknown> };
   };
 };
 
@@ -67,6 +69,17 @@ describe('vrt plugin', () => {
       interval: 100,
       disableAnimations: true,
     });
+  });
+
+  it('registers the viewport commands the capture hook calls', async () => {
+    const root = await makeRoot();
+
+    const result = callConfigHook(vrt({ enabled: true }), { root });
+
+    expect(Object.keys(result?.test?.browser?.commands ?? {})).toEqual([
+      FIT_VIEWPORT_COMMAND,
+      RESTORE_VIEWPORT_COMMAND,
+    ]);
   });
 
   it('warns when multiple browser instances run without browserNameSuffix', async () => {
