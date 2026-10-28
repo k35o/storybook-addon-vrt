@@ -24,3 +24,8 @@ export const MaskedTimestamp: Story = {
   ),
   parameters: { vrt: { mask: '[data-vrt-dynamic]' } },
 };
+
+export const CardOnly: Story = {
+  args: Default.args,
+  parameters: { vrt: { capture: 'section' } },
+};

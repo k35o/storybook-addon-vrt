@@ -53,6 +53,7 @@ const KEYS = {
   skipped: 'src/button.stories.tsx/Skipped-In-Vrt.png',
   cardDefault: 'src/card.stories.tsx/Default.png',
   cardMasked: 'src/card.stories.tsx/Masked-Timestamp.png',
+  cardOnly: 'src/card.stories.tsx/Card-Only.png',
   install: 'src/code-block.stories.tsx/Install.png',
   longListing: 'src/code-block.stories.tsx/Long-Listing.png',
   installAfterLongListing: 'src/code-block.stories.tsx/Install-After-Long-Listing.png',
@@ -60,6 +61,10 @@ const KEYS = {
 
 function readActual(key) {
   return readFileSync(path.join(actualDir, key));
+}
+
+function pngWidth(png) {
+  return png.readUInt32BE(16); // IHDR width
 }
 
 function pngHeight(png) {
@@ -77,6 +82,7 @@ for (const key of [
   KEYS.clicked,
   KEYS.cardDefault,
   KEYS.cardMasked,
+  KEYS.cardOnly,
   KEYS.install,
   KEYS.longListing,
   KEYS.installAfterLongListing,
@@ -86,6 +92,12 @@ for (const key of [
 assert(
   !existsSync(path.join(actualDir, KEYS.skipped)),
   'story with parameters.vrt.skip must not be captured',
+);
+
+// `parameters.vrt.capture` narrows the screenshot to the matched element.
+assert(
+  pngWidth(readActual(KEYS.cardOnly)) < pngWidth(readActual(KEYS.cardDefault)),
+  `${KEYS.cardOnly} must capture the card alone, not the whole page`,
 );
 
 // Capturing a story taller than the viewport must not change how the next
