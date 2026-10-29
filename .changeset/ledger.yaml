@@ -10,3 +10,8 @@ storybook-addon-vrt@0.4.0:
   dir: packages/storybook-addon-vrt
   intents:
     - comment-id-namespace
+storybook-addon-vrt@0.4.1:
+  dir: packages/storybook-addon-vrt
+  intents:
+    - keep-generic-fonts
+    - save-verified-screenshot

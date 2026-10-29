@@ -1,5 +1,13 @@
 # storybook-addon-vrt
 
+## 0.4.1
+
+### Patch Changes
+
+- Capturing a story taller than the viewport no longer changes how later stories render generic font families. Chromium captured such a story with `captureBeyondViewport`, which reset the generic families Playwright configures (`monospace`, `serif`, `sans-serif`, `cursive`, `fantasy` and the default font) to Chromium's own defaults until the page closed. Vitest runs many story files on one page, so a story using those families rendered differently depending on which files happened to share its page. The capture hook now grows the Playwright page to fit the capture target before each screenshot, keeping its orientation, and restores it afterwards (Chromium only). While a screenshot is taken, `screen.width`/`screen.height` and `device-*` media queries report the grown page; the story's own viewport does not change. Screenshots keep their size and content unless a story responds to the screen size; tall stories, and stories that used to run after one on the same page, now render generic families like any other story, so their baselines may need one re-approval. Vitest's own failure screenshots (`browser.screenshotFailures`, on by default in headless runs and taken on every failed attempt, including retried ones) still capture tall stories beyond the viewport; set it to `false` as in the Setup example.
+
+- Save the exact screenshot whose stability was verified. The capture hook used to confirm that two consecutive screenshots hash identically and then take one more screenshot to write to disk — that extra, unverified frame could land mid-animation and produce a flaky capture. The verified bytes are now written directly (via Vitest's fs command, falling back to a fresh screenshot when unavailable). Also documents that JS-driven animations (Framer Motion etc.) are not stopped by the injected CSS and should be disabled via `contextOptions: { reducedMotion: 'reduce' }`.
+
 ## 0.4.0
 
 ### Minor Changes
