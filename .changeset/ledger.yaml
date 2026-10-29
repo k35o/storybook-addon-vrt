@@ -15,3 +15,7 @@ storybook-addon-vrt@0.4.1:
   intents:
     - keep-generic-fonts
     - save-verified-screenshot
+storybook-addon-vrt@0.4.2:
+  dir: packages/storybook-addon-vrt
+  intents:
+    - capture-element
