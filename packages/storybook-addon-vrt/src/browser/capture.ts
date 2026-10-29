@@ -135,11 +135,9 @@ function resolveCaptureTarget(parameters: VrtStoryParameters): Element | undefin
 }
 
 async function takeBase64(element: Element | undefined): Promise<string> {
-  if (element) {
-    const { base64 } = await page.elementLocator(element).screenshot({ save: false, base64: true });
-    return base64;
-  }
-  // With `save: false`, `page.screenshot` returns the base64 string itself.
+  // With `save: false`, Vitest returns the base64 string itself, even with
+  // `base64: true` (which the Locator types claim yields `{ path, base64 }`).
+  if (element) return page.elementLocator(element).screenshot({ save: false });
   return page.screenshot({ save: false });
 }
 
