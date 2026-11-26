@@ -19,7 +19,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45 # the run waits up to 30 minutes for the npm approval
     environment: release
 
     steps:
@@ -52,7 +52,7 @@ jobs:
 
       - name: Release
         id: release
-        uses: k35o/pnpm-release-action@5e009384bf5b1d2501f8405817b5d5578a90624e # v0.2.2
+        uses: k35o/pnpm-release-action@2a8f9c9774de89ba0eee5aa9a7dcd2834c7c6868 # v0.4.0
         with:
           build: pnpm build
           github-token: ${{ steps.generate-token.outputs.token }}
