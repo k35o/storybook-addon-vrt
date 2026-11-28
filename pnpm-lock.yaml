@@ -198,8 +198,8 @@ catalogs:
       specifier: 5.1.1
       version: 5.1.1
     cac:
-      specifier: 7.1.0
-      version: 7.1.0
+      specifier: 7.1.1
+      version: 7.1.1
     pixelmatch:
       specifier: 8.0.0
       version: 8.0.0
@@ -298,7 +298,7 @@ importers:
     dependencies:
       cac:
         specifier: 'catalog:'
-        version: 7.1.0
+        version: 7.1.1
       pixelmatch:
         specifier: 'catalog:'
         version: 8.0.0
@@ -1764,8 +1764,8 @@ packages:
     resolution: {integrity: sha512-DdH81/zPLVS11EUgWq3tEu/xn+EzljlMYooDNdzWEnFha3R3NBMpMV1UqYIpjYHV/SgpFKMIX1Oh7o06SjM/oA==}
     engines: {node: '>=18'}
 
-  cac@7.1.0:
-    resolution: {integrity: sha512-LMDU/U2yA4IPIY8KT0NsNPWEYZvAMkbgyspxJ6btJaYV+WMDOHAZCmB0lsTObiHaRS1V/ztKAl7+TSkTqXyeoA==}
+  cac@7.1.1:
+    resolution: {integrity: sha512-8zc+h51HxpodKsA7L4PpBNd+9qlrfuUcyUDE5a793BJfN4NZgwk7v9NmrY3ptZ+Sk0+ToigxSzkb47AsEgyizw==}
     engines: {node: '>=20.19.0'}
 
   caniuse-lite@1.0.30001826:
@@ -3557,7 +3557,7 @@ snapshots:
     dependencies:
       run-applescript: 7.1.0
 
-  cac@7.1.0: {}
+  cac@7.1.1: {}
 
   caniuse-lite@1.0.30001826: {}
 
